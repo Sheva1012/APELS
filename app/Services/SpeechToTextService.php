@@ -4,12 +4,11 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use OpenAI\Laravel\Facades\OpenAI;
 
 /**
- * SpeechToTextService — OpenAI Whisper wrapper for speaking score.
+ * SpeechToTextService — Groq Whisper Large V3 wrapper for speaking score.
  *
- * Sends audio file to Whisper API, counts words in transcript,
+ * Sends audio file to Groq Whisper API, counts words in transcript,
  * and computes a speaking score (0..100).
  *
  * Scoring formula (Req 6.2, 6.3):
@@ -26,6 +25,10 @@ use OpenAI\Laravel\Facades\OpenAI;
  */
 class SpeechToTextService
 {
+    public function __construct(
+        private GroqService $groq
+    ) {}
+
     /**
      * Analyze audio file and return speaking score (0..100).
      *
@@ -45,13 +48,10 @@ class SpeechToTextService
         try {
             $absolutePath = Storage::disk('private')->path($audioPath);
 
-            $response = OpenAI::audio()->transcribe([
-                'model'    => 'whisper-large-v3',
-                'file'     => fopen($absolutePath, 'r'),
-                'language' => 'en',
-            ]);
+            // Call Groq Whisper Large V3 API (Req 9.1)
+            $response = $this->groq->transcribeAudio($absolutePath, 'en');
 
-            $transcript = $response->text ?? '';
+            $transcript = $response['text'] ?? '';
 
             return $this->scoreFromTranscript($transcript);
         } catch (\Throwable $e) {

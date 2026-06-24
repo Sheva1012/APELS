@@ -4,12 +4,11 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use OpenAI\Laravel\Facades\OpenAI;
 
 /**
- * NlpAnalysisService — OpenAI GPT-4o Mini wrapper for grammar & vocabulary scoring.
+ * NlpAnalysisService — Groq Llama-3.3-70B wrapper for grammar & vocabulary scoring.
  *
- * Sends combined text answers to GPT-4o Mini, requests JSON response with
+ * Sends combined text answers to Groq Llama-3.3-70B, requests JSON response with
  * grammar_score and vocab_score (0..100), caches result for 24h.
  *
  * Cache key (Req 7.5): nlp_result_{md5(implode('|', textAnswers))}
@@ -23,6 +22,10 @@ use OpenAI\Laravel\Facades\OpenAI;
  */
 class NlpAnalysisService
 {
+    public function __construct(
+        private GroqService $groq
+    ) {}
+
     /**
      * Analyze text answers and return grammar + vocabulary scores.
      *
@@ -45,27 +48,25 @@ class NlpAnalysisService
 
         // Cache::remember — cache hit skips API call (Req 7.6)
         return Cache::remember($cacheKey, 86400, function () use ($textAnswers, $fallback) {
-            return $this->callGpt4oMini($textAnswers, $fallback);
+            return $this->callGroqLlama($textAnswers, $fallback);
         });
     }
 
     /**
-     * Call GPT-4o Mini Chat Completions API.
+     * Call Groq Llama-3.3-70B Chat Completions API.
      *
      * @param  array<int, string>  $textAnswers
      * @param  array{grammar_score: int, vocab_score: int}  $fallback
      * @return array{grammar_score: int, vocab_score: int}
      */
-    private function callGpt4oMini(array $textAnswers, array $fallback): array
+    private function callGroqLlama(array $textAnswers, array $fallback): array
     {
         try {
             $combinedText = implode(' ', $textAnswers); // Req 7.1
 
-            $response = OpenAI::chat()->create([
-                'model'           => 'llama-3.3-70b-versatile',
-                'response_format' => ['type' => 'json_object'], // Req 7.2
-                'max_tokens'      => 100,
-                'messages'        => [
+            // Call Groq Llama-3.3-70B API (Req 9.2)
+            $response = $this->groq->chatCompletion(
+                messages: [
                     [
                         'role'    => 'system',
                         'content' => 'You are an English language evaluator. Analyze the given text and return ONLY a JSON object with these exact keys: grammar_score (integer 0-100), vocab_score (integer 0-100). No explanation, no markdown, just the JSON object.',
@@ -75,9 +76,14 @@ class NlpAnalysisService
                         'content' => $combinedText,
                     ],
                 ],
-            ]);
+                options: [
+                    'response_format' => ['type' => 'json_object'], // Req 7.2
+                    'max_tokens'      => 100,
+                    'temperature'     => 0.3, // Lower temperature for consistent JSON output
+                ]
+            );
 
-            $content = $response->choices[0]->message->content ?? '';
+            $content = $response['choices'][0]['message']['content'] ?? '';
             $parsed = json_decode($content, true);
 
             if (!is_array($parsed)) {
@@ -93,7 +99,7 @@ class NlpAnalysisService
 
             return ['grammar_score' => $grammar, 'vocab_score' => $vocab];
         } catch (\Throwable $e) {
-            Log::error('NlpAnalysisService::callGpt4oMini — API failure', [
+            Log::error('NlpAnalysisService::callGroqLlama — API failure', [
                 'error' => $e->getMessage(),
             ]);
             return $fallback;

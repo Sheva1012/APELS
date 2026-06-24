@@ -49,7 +49,7 @@ return [
     | Speech-to-Text Timeout (seconds)
     |--------------------------------------------------------------------------
     |
-    | Batas waktu (detik) panggilan OpenAI Whisper API di
+    | Batas waktu (detik) panggilan Groq Whisper Large V3 API di
     | `SpeechToTextService::analyze`. Jika melewati timeout, service akan
     | mencatat error dan mengembalikan skor 0. Default = 60 detik.
     |
@@ -62,7 +62,7 @@ return [
     | NLP Analysis Timeout (seconds)
     |--------------------------------------------------------------------------
     |
-    | Batas waktu (detik) panggilan OpenAI GPT-4o Mini di
+    | Batas waktu (detik) panggilan Groq Llama-3.3-70B di
     | `NlpAnalysisService::analyze`. Jika melewati timeout / parse error,
     | service mengembalikan `['grammar_score' => 0, 'vocab_score' => 0]`.
     | Default = 30 detik.
