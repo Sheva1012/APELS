@@ -19,8 +19,8 @@ beforeEach(function () {
 // ---- Daily limit (Req 3.1, 3.2, 34.3) ----
 
 test('mahasiswa who already tested today gets 429 (Req 3.1)', function () {
-    // Create existing test for today
-    DiagnosticResult::factory()->create([
+    // Create existing tests to reach daily limit of 4
+    DiagnosticResult::factory()->count(4)->create([
         'user_id'    => $this->mhs->id,
         'created_at' => now(),
     ]);
@@ -64,7 +64,7 @@ test('success response has correct shape (Req 17.1)', function () {
 });
 
 test('error response includes code field matching HTTP status (Req 17.2, 17.3)', function () {
-    DiagnosticResult::factory()->create([
+    DiagnosticResult::factory()->count(4)->create([
         'user_id'    => $this->mhs->id,
         'created_at' => now(),
     ]);

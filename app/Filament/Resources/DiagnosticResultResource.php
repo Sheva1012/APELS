@@ -65,9 +65,9 @@ class DiagnosticResultResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
-                Tables\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
+                \Filament\Actions\ViewAction::make(),
+                \Filament\Actions\EditAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
+                \Filament\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
             ]);
     }
 

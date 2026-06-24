@@ -63,8 +63,8 @@ class ModuleResource extends Resource
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced','professional'=>'Professional']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->actions([Tables\Actions\EditAction::make()])
-            ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
+            ->actions([\Filament\Actions\EditAction::make()])
+            ->bulkActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

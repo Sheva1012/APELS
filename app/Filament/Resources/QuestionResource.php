@@ -63,8 +63,8 @@ class QuestionResource extends Resource
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->actions([Tables\Actions\EditAction::make(), Tables\Actions\DeleteAction::make()])
-            ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
+            ->actions([\Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
+            ->bulkActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

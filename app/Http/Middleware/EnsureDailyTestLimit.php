@@ -17,6 +17,10 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Alias: `daily.test.limit` (didaftarkan di `bootstrap/app.php`). Middleware
  * ini dipasang pada route Diagnostic Test (lihat Task 11.2).
+ *
+ * Perilaku respons:
+ *  - Web request (browser)  → redirect ke halaman error yang cantik (HTTP 302)
+ *  - API / expects-JSON     → JSON 429 (ApiResponse::error) untuk kompatibilitas
  */
 class EnsureDailyTestLimit
 {
@@ -32,19 +36,32 @@ class EnsureDailyTestLimit
         if ($userId === null) {
             // Auth middleware handles unauthenticated users; this is a defensive guard
             // so the middleware tetap aman jika dipasang tanpa `auth` di depannya.
-            return ApiResponse::error('Tidak terautentikasi.', 401);
+            if ($request->expectsJson()) {
+                return ApiResponse::error('Tidak terautentikasi.', 401);
+            }
+            return redirect()->route('login');
         }
 
-        $alreadyTestedToday = DiagnosticResult::query()
+        $limit = (int) config('apels.daily_test_limit', 4);
+
+        $todayTestCount = DiagnosticResult::query()
             ->where('user_id', $userId)
             ->whereDate('created_at', today())
-            ->exists();
+            ->count();
+
+        $alreadyTestedToday = $todayTestCount >= $limit;
 
         if ($alreadyTestedToday) {
-            return ApiResponse::error(
-                'Anda sudah mengerjakan tes hari ini. Coba lagi besok.',
-                429
-            );
+            // API / AJAX: kembalikan JSON seperti biasa
+            if ($request->expectsJson()) {
+                return ApiResponse::error(
+                    'Anda sudah mengerjakan tes hari ini. Coba lagi besok.',
+                    429
+                );
+            }
+
+            // Web browser: tampilkan halaman error yang ramah pengguna
+            return response()->view('errors.daily-limit', [], 429);
         }
 
         return $next($request);

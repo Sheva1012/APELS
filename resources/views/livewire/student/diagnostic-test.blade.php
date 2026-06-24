@@ -21,16 +21,33 @@ new #[Layout('components.layouts.app')] class extends Component {
     public int $currentStep = 1;
 
     // Step 1: Grammar answers (min 3 elements)
-    public array $grammarAnswers = ['', '', ''];
+    public array $grammarAnswers = [];
 
     // Step 2: Vocabulary answers (min 3 elements)
-    public array $vocabAnswers = ['', '', ''];
+    public array $vocabAnswers = [];
+
+    // Questions loaded from database
+    public array $grammarQuestions = [];
+    public array $vocabQuestions = [];
 
     // Step 3: Audio file
     public $audioFile = null;
 
     public ?string $errorMessage = null;
     public bool $isSubmitting = false;
+
+    public function mount(): void
+    {
+        // Load all active grammar questions
+        $gQs = \App\Models\Question::active()->byType('grammar')->inRandomOrder()->get();
+        $this->grammarQuestions = $gQs->toArray();
+        $this->grammarAnswers = array_fill(0, count($this->grammarQuestions) ?: 3, '');
+
+        // Load all active vocabulary questions
+        $vQs = \App\Models\Question::active()->byType('vocabulary')->inRandomOrder()->get();
+        $this->vocabQuestions = $vQs->toArray();
+        $this->vocabAnswers = array_fill(0, count($this->vocabQuestions) ?: 3, '');
+    }
 
     /**
      * Add another answer field to grammar step.
@@ -88,11 +105,12 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         // Guard: cek daily limit (Req 3) — second line of defense
         // (first line: GET /diagnostic route middleware)
-        $alreadyTested = \App\Models\DiagnosticResult::where('user_id', auth()->id())
+        $limit = (int) config('apels.daily_test_limit', 4);
+        $todayTestCount = \App\Models\DiagnosticResult::where('user_id', auth()->id())
             ->whereDate('created_at', today())
-            ->exists();
+            ->count();
 
-        if ($alreadyTested) {
+        if ($todayTestCount >= $limit) {
             $this->errorMessage = 'Anda sudah mengerjakan tes hari ini. Coba lagi besok.';
             $this->isSubmitting = false;
             return;
@@ -104,10 +122,31 @@ new #[Layout('components.layouts.app')] class extends Component {
         ]);
 
         try {
+            // Map selected keys to option texts for the NLP analyzer
+            $grammarTexts = [];
+            foreach ($this->grammarAnswers as $index => $ans) {
+                $q = $this->grammarQuestions[$index] ?? null;
+                if ($q && in_array($ans, ['a', 'b', 'c', 'd'])) {
+                    $grammarTexts[] = $q["option_{$ans}"] ?? '';
+                } else {
+                    $grammarTexts[] = $ans;
+                }
+            }
+
+            $vocabTexts = [];
+            foreach ($this->vocabAnswers as $index => $ans) {
+                $q = $this->vocabQuestions[$index] ?? null;
+                if ($q && in_array($ans, ['a', 'b', 'c', 'd'])) {
+                    $vocabTexts[] = $q["option_{$ans}"] ?? '';
+                } else {
+                    $vocabTexts[] = $ans;
+                }
+            }
+
             // Combine text answers
             $textAnswers = array_merge(
-                array_filter($this->grammarAnswers, fn($a) => trim($a) !== ''),
-                array_filter($this->vocabAnswers, fn($a) => trim($a) !== ''),
+                array_filter($grammarTexts, fn($t) => trim($t) !== ''),
+                array_filter($vocabTexts, fn($t) => trim($t) !== ''),
             );
 
             // Store audio to private disk
@@ -130,14 +169,31 @@ new #[Layout('components.layouts.app')] class extends Component {
 
     private function validateGrammar(): void
     {
-        $filled = array_filter($this->grammarAnswers, fn($a) => strlen(trim($a)) >= 5);
-        if (count($filled) < 3) {
+        $requiredCount = count($this->grammarQuestions) ?: 3;
+        $filledCount = 0;
+
+        for ($i = 0; $i < $requiredCount; $i++) {
+            $q = $this->grammarQuestions[$i] ?? null;
+            $ans = $this->grammarAnswers[$i] ?? '';
+            if ($q) {
+                if (in_array($ans, ['a', 'b', 'c', 'd'])) {
+                    $filledCount++;
+                }
+            } else {
+                if (strlen(trim($ans)) >= 5) {
+                    $filledCount++;
+                }
+            }
+        }
+
+        if ($filledCount < $requiredCount) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'grammarAnswers' => 'Minimal 3 jawaban grammar dengan panjang minimal 5 karakter.',
+                'grammarAnswers' => "Semua soal grammar harus diisi dengan benar.",
             ]);
         }
+
         foreach ($this->grammarAnswers as $i => $answer) {
-            if (strlen($answer) > 500) {
+            if (isset($this->grammarQuestions[$i]) && !$this->grammarQuestions[$i] && strlen($answer) > 500) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'grammarAnswers' => "Jawaban " . ($i + 1) . " melebihi 500 karakter.",
                 ]);
@@ -147,14 +203,31 @@ new #[Layout('components.layouts.app')] class extends Component {
 
     private function validateVocab(): void
     {
-        $filled = array_filter($this->vocabAnswers, fn($a) => strlen(trim($a)) >= 5);
-        if (count($filled) < 3) {
+        $requiredCount = count($this->vocabQuestions) ?: 3;
+        $filledCount = 0;
+
+        for ($i = 0; $i < $requiredCount; $i++) {
+            $q = $this->vocabQuestions[$i] ?? null;
+            $ans = $this->vocabAnswers[$i] ?? '';
+            if ($q) {
+                if (in_array($ans, ['a', 'b', 'c', 'd'])) {
+                    $filledCount++;
+                }
+            } else {
+                if (strlen(trim($ans)) >= 5) {
+                    $filledCount++;
+                }
+            }
+        }
+
+        if ($filledCount < $requiredCount) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'vocabAnswers' => 'Minimal 3 jawaban vocabulary dengan panjang minimal 5 karakter.',
+                'vocabAnswers' => "Semua soal vocabulary harus diisi dengan benar.",
             ]);
         }
+
         foreach ($this->vocabAnswers as $i => $answer) {
-            if (strlen($answer) > 500) {
+            if (isset($this->vocabQuestions[$i]) && !$this->vocabQuestions[$i] && strlen($answer) > 500) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'vocabAnswers' => "Jawaban " . ($i + 1) . " melebihi 500 karakter.",
                 ]);
@@ -239,18 +312,45 @@ new #[Layout('components.layouts.app')] class extends Component {
 
                     <div class="space-y-4">
                         @foreach ($grammarAnswers as $index => $answer)
+                            @php
+                                $q = $grammarQuestions[$index] ?? null;
+                            @endphp
                             <div class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
-                                <flux:textarea
-                                    wire:model.live="grammarAnswers.{{ $index }}"
-                                    label="Jawaban {{ $index + 1 }}"
-                                    placeholder="Tulis kalimat bahasa Inggris Anda di sini..."
-                                    rows="2"
-                                />
-                                <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
-                                    <span>Minimal 5 karakter, maksimal 500 karakter</span>
-                                    <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
-                                        {{ strlen($answer ?? '') }}/500
-                                    </span>
+                                <div class="mb-1">
+                                    @if ($q)
+                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Soal {{ $index + 1 }} (Grammar)</span>
+                                        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                        <div class="mt-4 space-y-2">
+                                            @foreach (['a', 'b', 'c', 'd'] as $opt)
+                                                <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
+                                                    {{ ($grammarAnswers[$index] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
+                                                    <input type="radio"
+                                                           wire:model.live="grammarAnswers.{{ $index }}"
+                                                           value="{{ $opt }}"
+                                                           class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
+                                                    <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                                        <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
+                                                        {{ $q["option_{$opt}"] }}
+                                                    </span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Topik Bebas {{ $index + 1 }}</span>
+                                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">Tulis kalimat bebas lainnya dalam Bahasa Inggris untuk memperkuat penilaian tata bahasa Anda.</p>
+                                        <flux:textarea
+                                            wire:model.live="grammarAnswers.{{ $index }}"
+                                            label="Tulis Kalimat Jawaban Anda"
+                                            placeholder="Tulis kalimat jawaban lengkap Anda di sini..."
+                                            rows="2"
+                                        />
+                                        <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
+                                            <span>Minimal 5 karakter, maksimal 500 karakter</span>
+                                            <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
+                                                {{ strlen($answer ?? '') }}/500
+                                            </span>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -297,18 +397,45 @@ new #[Layout('components.layouts.app')] class extends Component {
 
                     <div class="space-y-4">
                         @foreach ($vocabAnswers as $index => $answer)
+                            @php
+                                $q = $vocabQuestions[$index] ?? null;
+                            @endphp
                             <div class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
-                                <flux:textarea
-                                    wire:model.live="vocabAnswers.{{ $index }}"
-                                    label="Jawaban {{ $index + 1 }}"
-                                    placeholder="Tulis kalimat kosakata Anda di sini..."
-                                    rows="2"
-                                />
-                                <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
-                                    <span>Minimal 5 karakter, maksimal 500 karakter</span>
-                                    <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
-                                        {{ strlen($answer ?? '') }}/500
-                                    </span>
+                                <div class="mb-1">
+                                    @if ($q)
+                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Soal {{ $index + 1 }} (Vocabulary)</span>
+                                        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                        <div class="mt-4 space-y-2">
+                                            @foreach (['a', 'b', 'c', 'd'] as $opt)
+                                                <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
+                                                    {{ ($vocabAnswers[$index] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
+                                                    <input type="radio"
+                                                           wire:model.live="vocabAnswers.{{ $index }}"
+                                                           value="{{ $opt }}"
+                                                           class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
+                                                    <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                                        <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
+                                                        {{ $q["option_{$opt}"] }}
+                                                    </span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Topik Bebas {{ $index + 1 }}</span>
+                                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">Tulis kalimat bebas menggunakan perbendaharaan kata (vocabulary) tingkat lanjut lainnya.</p>
+                                        <flux:textarea
+                                            wire:model.live="vocabAnswers.{{ $index }}"
+                                            label="Tulis Kalimat Jawaban Anda"
+                                            placeholder="Tulis kalimat jawaban lengkap Anda di sini..."
+                                            rows="2"
+                                        />
+                                        <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
+                                            <span>Minimal 5 karakter, maksimal 500 karakter</span>
+                                            <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
+                                                {{ strlen($answer ?? '') }}/500
+                                            </span>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -466,7 +593,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                         <flux:button wire:click="previousStep" variant="ghost" class="font-semibold" :disabled="$isSubmitting">
                             ← Kembali
                         </flux:button>
-                        <flux:button wire:click="submit" variant="primary" class="flex-1 sm:flex-none bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold shadow-md shadow-indigo-500/20 transition-all duration-300" wire:loading.attr="disabled" :disabled="$isSubmitting || isUploading">
+                        <flux:button wire:click="submit" variant="primary" class="flex-1 sm:flex-none bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold shadow-md shadow-indigo-500/20 transition-all duration-300" wire:loading.attr="disabled" x-bind:disabled="$wire.isSubmitting || isUploading">
                             <span wire:loading.remove wire:target="submit">Kirim Diagnostic Test</span>
                             <span wire:loading wire:target="submit" class="flex items-center justify-center gap-2">
                                 <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

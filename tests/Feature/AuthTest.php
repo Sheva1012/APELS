@@ -2,8 +2,13 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Volt\Volt;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $this->seed(\Database\Seeders\RoleSeeder::class);
+});
 
 /**
  * Task 3.6: Feature test auth + role access
@@ -12,15 +17,17 @@ uses(RefreshDatabase::class);
 describe('Authentication & Authorization', function () {
     describe('Registration', function () {
         it('registers a new user with NIM and assigns mahasiswa role', function () {
-            $response = $this->post('/register', [
-                'name' => 'Test Student',
-                'email' => 'student@test.com',
-                'nim' => '12345678',
-                'password' => 'password',
-                'password_confirmation' => 'password',
-            ]);
+            $response = Volt::test('auth.register')
+                ->set('name', 'Test Student')
+                ->set('email', 'student@test.com')
+                ->set('nim', '12345678')
+                ->set('password', 'password')
+                ->set('password_confirmation', 'password')
+                ->call('register');
 
-            $response->assertRedirect('/dashboard');
+            $response->assertHasNoErrors()
+                ->assertRedirect('/dashboard');
+
             $this->assertDatabaseHas('users', [
                 'email' => 'student@test.com',
                 'nim' => '12345678',
@@ -33,29 +40,29 @@ describe('Authentication & Authorization', function () {
         it('rejects duplicate NIM during registration', function () {
             User::factory()->create(['nim' => '12345678']);
 
-            $response = $this->post('/register', [
-                'name' => 'Another Student',
-                'email' => 'another@test.com',
-                'nim' => '12345678',
-                'password' => 'password',
-                'password_confirmation' => 'password',
-            ]);
+            $response = Volt::test('auth.register')
+                ->set('name', 'Another Student')
+                ->set('email', 'another@test.com')
+                ->set('nim', '12345678')
+                ->set('password', 'password')
+                ->set('password_confirmation', 'password')
+                ->call('register');
 
-            $response->assertSessionHasErrors(['nim']);
+            $response->assertHasErrors(['nim']);
         });
 
         it('requires unique email', function () {
             User::factory()->create(['email' => 'student@test.com']);
 
-            $response = $this->post('/register', [
-                'name' => 'Duplicate Student',
-                'email' => 'student@test.com',
-                'nim' => '87654321',
-                'password' => 'password',
-                'password_confirmation' => 'password',
-            ]);
+            $response = Volt::test('auth.register')
+                ->set('name', 'Duplicate Student')
+                ->set('email', 'student@test.com')
+                ->set('nim', '87654321')
+                ->set('password', 'password')
+                ->set('password_confirmation', 'password')
+                ->call('register');
 
-            $response->assertSessionHasErrors(['email']);
+            $response->assertHasErrors(['email']);
         });
     });
 
@@ -67,12 +74,13 @@ describe('Authentication & Authorization', function () {
             ]);
             $user->assignRole('mahasiswa');
 
-            $response = $this->post('/login', [
-                'email' => 'student@test.com',
-                'password' => 'password',
-            ]);
+            $response = Volt::test('auth.login')
+                ->set('email', 'student@test.com')
+                ->set('password', 'password')
+                ->call('login');
 
-            $response->assertRedirect('/dashboard');
+            $response->assertHasNoErrors()
+                ->assertRedirect('/dashboard');
             $this->assertAuthenticatedAs($user);
         });
 
@@ -82,24 +90,23 @@ describe('Authentication & Authorization', function () {
                 'password' => bcrypt('password'),
             ]);
 
-            $response = $this->post('/login', [
-                'email' => 'student@test.com',
-                'password' => 'wrong-password',
-            ]);
+            $response = Volt::test('auth.login')
+                ->set('email', 'student@test.com')
+                ->set('password', 'wrong-password')
+                ->call('login');
 
-            $response->assertSessionHasErrors(['email']);
+            $response->assertHasErrors(['email']);
             $this->assertGuest();
         });
 
         it('shows generic error message (no email/password hint)', function () {
-            $response = $this->post('/login', [
-                'email' => 'nonexistent@test.com',
-                'password' => 'password',
-            ]);
+            $response = Volt::test('auth.login')
+                ->set('email', 'nonexistent@test.com')
+                ->set('password', 'password')
+                ->call('login');
 
             // Error message should not reveal whether email exists
-            $response->assertSessionHasErrors('email');
-            $response->assertSessionHas('errors');
+            $response->assertHasErrors(['email']);
         });
 
         it('redirects guest to login page', function () {
@@ -197,7 +204,7 @@ describe('Authentication & Authorization', function () {
             $this->assertAuthenticatedAs($user);
 
             $response = $this->post('/logout');
-            $response->assertRedirect('/');
+            $response->assertRedirect('/login');
             $this->assertGuest();
         });
 

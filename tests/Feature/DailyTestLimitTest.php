@@ -6,6 +6,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->seed(\Database\Seeders\RoleSeeder::class);
+});
+
 /**
  * Task 4.3: Feature test EnsureDailyTestLimit + ApiResponse format
  * Validates Requirements: 3.1, 3.2, 17.1, 17.2
@@ -20,12 +24,12 @@ describe('Daily Test Limit Middleware', function () {
             $response->assertSuccessful();
         });
 
-        it('blocks second diagnostic test on the same day (429)', function () {
+        it('blocks fifth diagnostic test on the same day (429)', function () {
             $user = User::factory()->create();
             $user->assignRole('mahasiswa');
 
-            // Create a diagnostic result for today
-            DiagnosticResult::factory()->create([
+            // Create 4 diagnostic results for today
+            DiagnosticResult::factory()->count(4)->create([
                 'user_id' => $user->id,
                 'created_at' => now(),
             ]);
@@ -52,8 +56,8 @@ describe('Daily Test Limit Middleware', function () {
             $user = User::factory()->create();
             $user->assignRole('mahasiswa');
 
-            // Create result at current time
-            DiagnosticResult::factory()->create([
+            // Create 4 results at current time
+            DiagnosticResult::factory()->count(4)->create([
                 'user_id' => $user->id,
                 'created_at' => now(config('app.timezone')),
             ]);

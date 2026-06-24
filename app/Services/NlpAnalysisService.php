@@ -62,7 +62,7 @@ class NlpAnalysisService
             $combinedText = implode(' ', $textAnswers); // Req 7.1
 
             $response = OpenAI::chat()->create([
-                'model'           => 'gpt-4o-mini',
+                'model'           => 'llama-3.3-70b-versatile',
                 'response_format' => ['type' => 'json_object'], // Req 7.2
                 'max_tokens'      => 100,
                 'messages'        => [

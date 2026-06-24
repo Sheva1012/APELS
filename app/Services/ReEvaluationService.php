@@ -47,8 +47,11 @@ class ReEvaluationService
      */
     public function canTakeTestToday(int $userId): bool
     {
-        return !DiagnosticResult::where('user_id', $userId)
+        $limit = (int) config('apels.daily_test_limit', 4);
+        $count = DiagnosticResult::where('user_id', $userId)
             ->whereDate('created_at', today())
-            ->exists();
+            ->count();
+
+        return $count < $limit;
     }
 }

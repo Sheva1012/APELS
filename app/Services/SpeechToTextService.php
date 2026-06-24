@@ -46,7 +46,7 @@ class SpeechToTextService
             $absolutePath = Storage::disk('private')->path($audioPath);
 
             $response = OpenAI::audio()->transcribe([
-                'model'    => 'whisper-1',
+                'model'    => 'whisper-large-v3',
                 'file'     => fopen($absolutePath, 'r'),
                 'language' => 'en',
             ]);
