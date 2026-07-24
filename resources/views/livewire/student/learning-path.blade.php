@@ -229,11 +229,16 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">{{ $module['description'] }}</p>
                                     @endif
                                     <div class="mt-4">
-                                        <a href="{{ route('module-detail', $module['id']) }}" wire:navigate
-                                           class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors">
-                                            View Detail
-                                            <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                                        </a>
+                                        @php
+                                            $firstLesson = \App\Models\Lesson::where('module_id', $module['id'])->orderBy('order_index')->first();
+                                        @endphp
+                                        @if($firstLesson)
+                                            <a href="{{ route('lesson-detail', $firstLesson->id) }}" wire:navigate
+                                               class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors">
+                                                Review Material
+                                                <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                            </a>
+                                        @endif
                                     </div>
                                 </div>
                             @else
@@ -253,11 +258,16 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">{{ $module['description'] }}</p>
                                     @endif
                                     <div class="mt-4">
-                                        <a href="{{ route('module-detail', $module['id']) }}" wire:navigate
-                                           class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                                            Continue Learning
-                                        </a>
+                                        @php
+                                            $firstLesson = \App\Models\Lesson::where('module_id', $module['id'])->orderBy('order_index')->first();
+                                        @endphp
+                                        @if($firstLesson)
+                                            <a href="{{ route('lesson-detail', $firstLesson->id) }}" wire:navigate
+                                               class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                                                Continue Learning
+                                            </a>
+                                        @endif
                                     </div>
                                 </div>
                             @endif

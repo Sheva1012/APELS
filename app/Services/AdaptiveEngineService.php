@@ -176,30 +176,10 @@ class AdaptiveEngineService
         return ['unlocked' => $unlocked, 'locked' => $locked];
     }
 
-    /**
-     * Pure decision: apakah satu module harus di-unlock.
-     *
-     * Rules (Req 10.1-10.4):
-     *   1. level == 'basic' → true
-     *   2. level == 'professional' → true iff all scores >= 70
-     *   3. module.path_key == pathKey → true
-     *   4. else → false
-     */
     private function shouldUnlock(Module $module, string $pathKey, array $scores): bool
     {
-        if ($module->level === 'basic') {
-            return true;
-        }
-
-        if ($module->level === 'advanced') {
-            $sp = $scores['speaking']   ?? 0;
-            $gr = $scores['grammar']    ?? 0;
-            $vo = $scores['vocabulary'] ?? 0;
-            
-            $overall = ($sp + $gr + $vo) / 3;
-            return $overall >= 70;
-        }
-
-        return $module->path_key === $pathKey;
+        // Hanya modul pertama (order_index == 1) yang terbuka secara default.
+        // Modul berikutnya akan terbuka setelah modul sebelumnya diselesaikan.
+        return $module->order_index === 1;
     }
 }
