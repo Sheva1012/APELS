@@ -25,6 +25,9 @@ class QuestionResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Forms\Components\Select::make('set')
+                ->options(['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'])
+                ->required(),
             Forms\Components\Textarea::make('question')->required()->maxLength(1000)->rows(3)->columnSpanFull(),
             Forms\Components\TextInput::make('option_a')->label('Option A')->required()->maxLength(1000),
             Forms\Components\TextInput::make('option_b')->label('Option B')->required()->maxLength(1000),
@@ -45,6 +48,10 @@ class QuestionResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('set')->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'A' => 'primary', 'B' => 'warning', 'C' => 'success', default => 'gray',
+                    })->sortable(),
                 Tables\Columns\TextColumn::make('question')->limit(60)->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('type')->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -57,14 +64,16 @@ class QuestionResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
+                Tables\Filters\SelectFilter::make('set')
+                    ->options(['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C']),
                 Tables\Filters\SelectFilter::make('type')
                     ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary']),
                 Tables\Filters\SelectFilter::make('tag')
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->actions([\Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
-            ->bulkActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
+            ->recordActions([\Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
+            ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

@@ -26,6 +26,19 @@ new #[Layout('components.layouts.app')] class extends Component {
     public bool   $shouldReEvaluate  = false;
     public bool   $hasTest           = false;
     public ?string $overallReadiness = null;
+    public ?string $speakingTranscript = null;
+    public int    $speakingWordCount  = 0;
+    public ?string $speakingReference = null;
+
+    // New analytics properties
+    public array $strongestSkill = ['name' => '-', 'score' => 0];
+    public array $weakestSkill   = ['name' => '-', 'score' => 0];
+    public array $nextTarget     = ['name' => '-', 'score' => 0];
+    public int $learningGrowth   = 15; // Mock data as discussed
+    public int $totalModules     = 0;
+    public int $completedModules = 0;
+    public int $remainingModules = 0;
+    public array $performanceChartData = [];
 
     // Skill labels keyed by skill name
     public array $skillLabels = [
@@ -56,18 +69,26 @@ new #[Layout('components.layouts.app')] class extends Component {
             return;
         }
 
-        // Auto-complete if stuck/unprocessed (since API is not connected / queue is slow)
         if (!$diagnostic->is_speaking_processed) {
-            $diagnostic->update([
-                'speaking' => rand(70, 85),
-                'is_speaking_processed' => true,
-            ]);
-            app(\App\Services\DiagnosticService::class)->runEngineAndFeedback($userId, $diagnostic->fresh());
-            $diagnostic = $diagnostic->fresh();
+            $this->hasTest            = true;
+            $this->speakingProcessing = true;
+            $this->skills = [
+                'speaking'   => 0,
+                'grammar'    => $diagnostic->grammar ?? 0,
+                'vocabulary' => $diagnostic->vocabulary ?? 0,
+            ];
+            return;
         }
 
         $this->hasTest           = true;
         $this->speakingProcessing = false;
+
+        // Speaking transcript for pronunciation feedback
+        $this->speakingTranscript = $diagnostic->speaking_transcript ?? null;
+        $this->speakingReference  = $diagnostic->speaking_reference  ?? null;
+        $this->speakingWordCount  = $this->speakingTranscript
+            ? str_word_count(trim($this->speakingTranscript))
+            : 0;
 
         // Skills for radar chart (Req 13.1)
         $this->skills = [
@@ -79,11 +100,46 @@ new #[Layout('components.layouts.app')] class extends Component {
         // Overall readiness label based on score
         $overall = $diagnostic->overall ?? 0;
         $this->overallReadiness = match (true) {
-            $overall >= 85 => 'Industry-Ready',
             $overall >= 70 => 'Advanced',
             $overall >= 55 => 'Intermediate',
-            default        => 'Beginner',
+            default        => 'Basic',
         };
+
+        // Analytics Calculations
+        $sScore = $this->skills['speaking'];
+        $gScore = $this->skills['grammar'];
+        $vScore = $this->skills['vocabulary'];
+        
+        $skillScores = [
+            'Speaking' => $sScore,
+            'Grammar' => $gScore,
+            'Vocabulary' => $vScore,
+        ];
+
+        // Strongest Skill
+        $maxScore = max($skillScores);
+        $maxSkill = array_search($maxScore, $skillScores);
+        $this->strongestSkill = ['name' => $maxSkill, 'score' => $maxScore];
+
+        // Weakest Skill
+        $minScore = min($skillScores);
+        $minSkill = array_search($minScore, $skillScores);
+        $this->weakestSkill = ['name' => $minSkill, 'score' => $minScore];
+
+        // Next Target (Closest to 80, but below 80. If all >= 80, just pick the lowest)
+        $closestToTarget = null;
+        $closestScore = -1;
+        foreach ($skillScores as $name => $score) {
+            if ($score < 80 && $score > $closestScore) {
+                $closestScore = $score;
+                $closestToTarget = $name;
+            }
+        }
+        if (!$closestToTarget) {
+            $closestToTarget = $minSkill;
+            $closestScore = $minScore;
+        }
+        $this->nextTarget = ['name' => $closestToTarget, 'score' => $closestScore];
 
         // Active learning path (Req 13.2)
         $learningPath    = UserLearningPath::where('user_id', $userId)->first();
@@ -117,14 +173,29 @@ new #[Layout('components.layouts.app')] class extends Component {
             'status'      => $this->resolveStatus($mp),
         ])->toArray();
 
-        $total           = count($this->modules);
-        $completed       = collect($this->modules)->where('is_completed', true)->count();
-        $this->progress  = $total > 0 ? (int) round($completed / $total * 100) : 0;
+        $this->totalModules     = count($this->modules);
+        $this->completedModules = collect($this->modules)->where('is_completed', true)->count();
+        $this->remainingModules = max(0, $this->totalModules - $this->completedModules);
+        $this->progress         = $this->totalModules > 0 ? (int) round($this->completedModules / $this->totalModules * 100) : 0;
 
         // Re-evaluation suggestion (Req 16.2)
         $reEval               = app(ReEvaluationService::class);
         $this->shouldReEvaluate = $reEval->shouldReEvaluateByProgress($userId)
             && $reEval->canTakeTestToday($userId);
+
+        // History for performance chart
+        $histories = DiagnosticResult::where('user_id', $userId)
+            ->orderBy('created_at', 'asc')
+            ->take(15)
+            ->get();
+            
+        $this->performanceChartData = [
+            'labels' => $histories->map(fn($h) => $h->created_at->format('d M'))->toArray(),
+            'overall' => $histories->pluck('overall')->map(fn($v) => $v ?? 0)->toArray(),
+            'speaking' => $histories->pluck('speaking')->map(fn($v) => $v ?? 0)->toArray(),
+            'grammar' => $histories->pluck('grammar')->map(fn($v) => $v ?? 0)->toArray(),
+            'vocabulary' => $histories->pluck('vocabulary')->map(fn($v) => $v ?? 0)->toArray(),
+        ];
     }
 
     private function resolveStatus($moduleProgress): string
@@ -138,7 +209,7 @@ new #[Layout('components.layouts.app')] class extends Component {
 {{-- ════════════════════════════════════════════════════════════
      DASHBOARD WRAPPER
      ════════════════════════════════════════════════════════════ --}}
-<div class="relative px-1 py-4 space-y-6">
+<div class="relative w-full min-w-0 px-4 py-4 space-y-6">
 
     {{-- Speaking processing banner (Req 13.4) --}}
     @if ($speakingProcessing)
@@ -213,7 +284,7 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         {{-- ── TWO-COLUMN GRID ────────────────────────────────────
              Left  : Skill Map + AI Feedback
-             Right : Adaptive Learning Roadmap
+             Right : Learning Path + Industry Ready
              ─────────────────────────────────────────────────────── --}}
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
@@ -222,412 +293,829 @@ new #[Layout('components.layouts.app')] class extends Component {
                  ══════════════════════════════════ --}}
             <div class="flex flex-col gap-5">
 
-                {{-- ── Personalized Skill Map ─────────────────── --}}
-                <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5">
-                    {{-- Header --}}
-                    <div class="flex items-start justify-between mb-3">
-                        <div>
-                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">Personalized Skill Map</h2>
+                {{-- ── Skill Performance Overview ─────────────────── --}}
+                <div x-data="{ showCard: false }" x-init="setTimeout(() => showCard = true, 100)" 
+                     class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 transition-all duration-700 transform"
+                     :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                    
+                    {{-- Header with Glassmorphism Tooltip --}}
+                    <div class="flex items-start justify-between mb-2" x-data="{ showInfo: false }">
+                        <div class="relative">
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">Skill Performance Overview</h2>
                         </div>
-                        <button class="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Info">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
-                        </button>
+                        <div class="relative">
+                            <button @mouseenter="showInfo = true" @mouseleave="showInfo = false" @click="showInfo = !showInfo" class="p-1 text-zinc-400 hover:text-orange-500 transition-colors cursor-pointer" title="Info">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
+                            </button>
+                            
+                            {{-- Info Popup --}}
+                            <div x-show="showInfo" x-transition.opacity.duration.300ms style="display: none;"
+                                 class="absolute right-0 top-7 z-50 w-64 bg-zinc-900/90 backdrop-blur-md border-t border-orange-500/80 rounded-xl p-4 shadow-[0_4px_20px_rgba(249,115,22,0.15)] pointer-events-none text-left">
+                                <div class="flex items-center gap-2 mb-2 border-b border-zinc-700/60 pb-2">
+                                    <span class="text-lg">📊</span>
+                                    <h3 class="text-sm font-bold text-white">Skill Performance Overview</h3>
+                                </div>
+                                <p class="text-[11px] text-zinc-300 mb-2 leading-relaxed">
+                                    Menampilkan perkembangan kemampuan berdasarkan:
+                                </p>
+                                <ul class="text-[11px] text-zinc-400 mb-3 space-y-0.5 list-disc pl-4 font-medium">
+                                    <li>Speaking</li>
+                                    <li>Grammar</li>
+                                    <li>Vocabulary</li>
+                                </ul>
+                                <div class="space-y-1.5 text-[11px] pt-1 border-t border-zinc-700/60">
+                                    <div class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-orange-400"></span><span class="text-zinc-300">Orange line = Current Level</span></div>
+                                    <div class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 border-t border-dashed border-zinc-400"></span><span class="text-zinc-300">Dashed line = Target Level</span></div>
+                                    <p class="text-[10px] text-zinc-400 italic mt-1">Digunakan untuk melihat kemampuan yang perlu ditingkatkan.</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {{-- Overall readiness badge --}}
-                    <div class="mb-4">
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                            @if($overallReadiness === 'Industry-Ready') bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                            @elseif($overallReadiness === 'Advanced') bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                            @elseif($overallReadiness === 'Intermediate') bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                            @else bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 @endif">
-                            <span class="w-1.5 h-1.5 rounded-full
-                                @if($overallReadiness === 'Industry-Ready') bg-emerald-500
-                                @elseif($overallReadiness === 'Advanced') bg-blue-500
-                                @elseif($overallReadiness === 'Intermediate') bg-amber-500
-                                @else bg-zinc-400 @endif"></span>
-                            Overall Readiness: {{ $overallReadiness }}
-                        </span>
-                    </div>
+                    {{-- Radar Chart Container --}}
+                    @php
+                        // Score calculation for radar chart
+                        $sScore = $skills['speaking'] ?? 0;
+                        $gScore = $skills['grammar'] ?? 0;
+                        $vScore = $skills['vocabulary'] ?? 0;
 
-                    {{-- Radar chart container (Custom SVG Pentagram) --}}
-                    <div class="relative w-full max-w-[480px] h-[390px] mx-auto flex items-center justify-center mt-6 mb-2">
+                        // Points definition (clockwise from top)
+                        $points = [
+                            ['label' => 'Speaking', 'score' => $sScore, 'target' => 80],
+                            ['label' => 'Grammar', 'score' => $gScore, 'target' => 85],
+                            ['label' => 'Vocabulary', 'score' => $vScore, 'target' => 80],
+                        ];
+
+                        $numPoints = count($points);
                         
-                        {{-- The SVG Radar Chart --}}
-                        <svg viewBox="0 0 300 300" class="w-[280px] h-[280px] select-none">
-                            <defs>
-                                <linearGradient id="polyGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-                                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.3"/>
-                                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.3"/>
-                                </linearGradient>
-                            </defs>
-                            
-                            {{-- Concentric pentagons for grid --}}
-                            @php
-                                $getPentagonPath = function($r) {
-                                    $x0 = 150; $y0 = 150 - $r;
-                                    $x1 = 150 + 0.951 * $r; $y1 = 150 - 0.309 * $r;
-                                    $x2 = 150 + 0.588 * $r; $y2 = 150 + 0.809 * $r;
-                                    $x3 = 150 - 0.588 * $r; $y3 = 150 + 0.809 * $r;
-                                    $x4 = 150 - 0.951 * $r; $y4 = 150 - 0.309 * $r;
-                                    return "$x0,$y0 $x1,$y1 $x2,$y2 $x3,$y3 $x4,$y4";
-                                };
-                            @endphp
-                            
-                            {{-- Levels grid --}}
-                            <polygon points="{{ $getPentagonPath(135) }}" fill="none" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" />
-                            <polygon points="{{ $getPentagonPath(101.25) }}" fill="none" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-dasharray="3,3" stroke-width="1" />
-                            <polygon points="{{ $getPentagonPath(67.5) }}" fill="none" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-dasharray="3,3" stroke-width="1" />
-                            <polygon points="{{ $getPentagonPath(33.75) }}" fill="none" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-dasharray="3,3" stroke-width="1" />
-                            
-                            {{-- Connectors --}}
-                            <line x1="150" y1="150" x2="150" y2="15" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" stroke-dasharray="2,2" />
-                            <line x1="150" y1="150" x2="278.4" y2="108.3" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" stroke-dasharray="2,2" />
-                            <line x1="150" y1="150" x2="229.4" y2="259.2" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" stroke-dasharray="2,2" />
-                            <line x1="150" y1="150" x2="70.6" y2="259.2" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" stroke-dasharray="2,2" />
-                            <line x1="150" y1="150" x2="21.6" y2="108.3" stroke="#e4e4e7" class="dark:stroke-zinc-800" stroke-width="1" stroke-dasharray="2,2" />
-                            
-                            {{-- Target Level (dashed outline, 80% grid level = 108) --}}
-                            <polygon points="{{ $getPentagonPath(108) }}" fill="none" stroke="#a1a1aa" class="dark:stroke-zinc-600" stroke-dasharray="4,4" stroke-width="1.5" />
-                            
-                            {{-- User Level polygon --}}
-                            @php
-                                $sScore = $skills['speaking'] ?? 0;
-                                $gScore = $skills['grammar'] ?? 0;
-                                $vScore = $skills['vocabulary'] ?? 0;
-                                $wScore = (int) round(($gScore + $vScore) / 2);
+                        $getPentagonPath = function($radius) use ($numPoints) {
+                            $path = '';
+                            for ($i = 0; $i < $numPoints; $i++) {
+                                $angle = -M_PI / 2 + ($i * 2 * M_PI / $numPoints);
+                                $x = 150 + $radius * cos($angle);
+                                $y = 150 + $radius * sin($angle);
+                                $path .= ($i === 0 ? 'M' : 'L') . " {$x},{$y} ";
+                            }
+                            return $path . 'Z';
+                        };
+
+                        $getUserLevelPath = function() use ($points, $numPoints) {
+                            $path = '';
+                            foreach ($points as $i => $pt) {
+                                $radius = 120 * ($pt['score'] / 100);
+                                $angle = -M_PI / 2 + ($i * 2 * M_PI / $numPoints);
+                                $x = 150 + $radius * cos($angle);
+                                $y = 150 + $radius * sin($angle);
+                                $path .= ($i === 0 ? 'M' : 'L') . " {$x},{$y} ";
+                            }
+                            return $path . 'Z';
+                        };
+
+                        $getTargetLevelPath = function() use ($points, $numPoints) {
+                            $path = '';
+                            foreach ($points as $i => $pt) {
+                                $radius = 120 * ($pt['target'] / 100);
+                                $angle = -M_PI / 2 + ($i * 2 * M_PI / $numPoints);
+                                $x = 150 + $radius * cos($angle);
+                                $y = 150 + $radius * sin($angle);
+                                $path .= ($i === 0 ? 'M' : 'L') . " {$x},{$y} ";
+                            }
+                            return $path . 'Z';
+                        };
+                    @endphp
+
+                    <div x-data="{
+                            initChart() {
+                                if (typeof Chart === 'undefined') {
+                                    setTimeout(() => this.initChart(), 100);
+                                    return;
+                                }
                                 
-                                $r_speaking = 25 + ($sScore * 1.1);
-                                $r_vocab_acc = 25 + ($vScore * 1.1);
-                                $r_vocab_bus = 25 + (max($vScore - 3, 0) * 1.1);
-                                $r_writing = 25 + ($wScore * 1.1);
-                                $r_grammar = 25 + ($gScore * 1.1);
-                                
-                                $userPoints = [
-                                    [150, 150 - $r_speaking],
-                                    [150 + 0.951 * $r_vocab_acc, 150 - 0.309 * $r_vocab_acc],
-                                    [150 + 0.588 * $r_vocab_bus, 150 + 0.809 * $r_vocab_bus],
-                                    [150 - 0.588 * $r_writing, 150 + 0.809 * $r_writing],
-                                    [150 - 0.951 * $r_grammar, 150 - 0.309 * $r_grammar]
-                                ];
-                                
-                                $userPointsStr = implode(' ', array_map(fn($p) => "{$p[0]},{$p[1]}", $userPoints));
-                            @endphp
-                            <polygon points="{{ $userPointsStr }}" fill="url(#polyGrad)" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round" />
-                            
-                            {{-- Bullet points --}}
-                            @foreach ($userPoints as $i => $pt)
-                                @php
-                                    $scoreVal = match($i) {
-                                        0 => $sScore,
-                                        1 => $vScore,
-                                        2 => max($vScore - 3, 0),
-                                        3 => $wScore,
-                                        4 => $gScore
-                                    };
-                                    $bulletColor = $scoreVal >= 75 ? '#10b981' : '#f59e0b';
-                                @endphp
-                                <circle cx="{{ $pt[0] }}" cy="{{ $pt[1] }}" r="4.5" fill="{{ $bulletColor }}" stroke="#fff" stroke-width="1.5" />
-                            @endforeach
-                        </svg>
-                        
-                        {{-- ── 5 LABELS POSITIONED AROUND ── --}}
-                        {{-- 1. Speaking (Top Center) --}}
-                        <div class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center text-center">
-                            <div class="flex items-center gap-1">
-                                <svg class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                                </svg>
-                                <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300">Speaking</span>
-                            </div>
-                        </div>
-                        
-                        {{-- 2. Accounting Vocabulary (Middle Right) --}}
-                        <div class="absolute top-[85px] right-2 w-[110px] flex flex-col items-start text-left">
-                            <div class="flex items-start gap-1">
-                                <svg class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                <div class="flex flex-col">
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Accounting</span>
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Vocabulary</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {{-- 3. Business Vocabulary (Bottom Right) --}}
-                        <div class="absolute bottom-2 right-2 w-[120px] flex flex-col items-start text-left">
-                            <div class="flex items-start gap-1">
-                                <svg class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                                </svg>
-                                <div class="flex flex-col">
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Business</span>
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Vocabulary</span>
-                                </div>
-                            </div>
-                            <div class="pl-[18px] flex flex-col">
-                                <span class="text-[9px] text-zinc-400 leading-none mt-0.5">Financial Reporting</span>
-                            </div>
-                        </div>
-                        
-                        {{-- 4. Professional Writing (Bottom Left) --}}
-                        <div class="absolute bottom-2 left-2 w-[120px] flex flex-col items-end text-right">
-                            <div class="flex items-start gap-1 justify-end">
-                                <div class="flex flex-col items-end">
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Professional</span>
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Writing</span>
-                                </div>
-                                <svg class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                                </svg>
-                            </div>
-                            <div class="pr-[18px] flex flex-col items-end">
-                                <span class="text-[9px] text-zinc-400 leading-none mt-0.5">Accounting ESP</span>
-                            </div>
-                        </div>
-                        
-                        {{-- 5. Grammar (Middle Left) --}}
-                        <div class="absolute top-[85px] left-2 w-[110px] flex flex-col items-end text-right">
-                            <div class="flex items-start gap-1 justify-end">
-                                <div class="flex flex-col items-end">
-                                    <span class="text-[13px] font-extrabold text-zinc-700 dark:text-zinc-300 leading-tight">Grammar</span>
-                                </div>
-                                <span class="w-3.5 h-3.5 border border-zinc-500 dark:border-zinc-400 rounded text-[9px] font-black flex items-center justify-center shrink-0 mt-0.5">A</span>
-                            </div>
-                        </div>
-                        
+                                fetch('/api/dashboard', { 
+                                    headers: { 
+                                        'Accept': 'application/json' 
+                                    } 
+                                })
+                                .then(r => r.json())
+                                .then(res => {
+                                    if(!res.data || !res.data.skills) return;
+                                    const data = res.data.skills;
+                                    
+                                    if (this.chartInstance) {
+                                        this.chartInstance.destroy();
+                                    }
+                                    
+                                    this.chartInstance = new Chart(this.$refs.canvas, {
+                                        type: 'radar',
+                                        data: {
+                                            labels: ['Speaking', 'Grammar', 'Vocabulary'],
+                                            datasets: [{
+                                                label: 'Current Skill Level',
+                                                data: [data.speaking, data.grammar, data.vocabulary],
+                                                backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                                                borderColor: 'rgba(249, 115, 22, 1)',
+                                                pointBackgroundColor: 'rgba(249, 115, 22, 1)',
+                                                pointBorderColor: '#fff',
+                                                pointHoverBackgroundColor: '#fff',
+                                                pointHoverBorderColor: 'rgba(249, 115, 22, 1)'
+                                            },
+                                            {
+                                                label: 'Target Level',
+                                                data: [80, 85, 80],
+                                                backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                                                borderColor: 'rgba(16, 185, 129, 0.5)',
+                                                borderDash: [5, 5],
+                                                pointRadius: 0
+                                            }]
+                                        },
+                                        options: {
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            scales: {
+                                                r: {
+                                                    angleLines: { color: 'rgba(161, 161, 170, 0.3)' },
+                                                    grid: { color: 'rgba(161, 161, 170, 0.3)' },
+                                                    pointLabels: {
+                                                        color: '#a1a1aa',
+                                                        font: { size: 11, weight: 'bold' }
+                                                    },
+                                                    ticks: {
+                                                        display: false,
+                                                        min: 0,
+                                                        max: 100,
+                                                        stepSize: 20
+                                                    }
+                                                }
+                                            },
+                                            plugins: {
+                                                legend: { display: false }
+                                            }
+                                        }
+                                    });
+                                })
+                                .catch(err => console.error('Error fetching dashboard API:', err));
+                            }
+                        }"
+                        x-init="initChart()"
+                        class="relative w-full max-w-[380px] h-[300px] mx-auto flex items-center justify-center mt-2 mb-2"
+                    >
+                        <canvas x-ref="canvas"></canvas>
                     </div>
 
                     {{-- Legend --}}
-                    <div class="flex items-center justify-center gap-5 mt-4 text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
+                    <div class="flex items-center justify-center gap-4 mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
                         <div class="flex items-center gap-1.5">
-                            <span class="w-6 h-1 bg-gradient-to-r from-amber-400 to-emerald-500 rounded-full inline-block"></span>
-                            <span>Your Level</span>
+                            <span class="w-4 h-1 bg-orange-400 rounded-full inline-block"></span>
+                            <span>Current</span>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <span class="w-6 border-t border-dashed border-zinc-400 inline-block"></span>
-                            <span>Target Level</span>
+                            <span class="w-4 border-t border-dashed border-zinc-400 inline-block"></span>
+                            <span>Target</span>
                         </div>
                     </div>
                 </div>
 
                 {{-- ── AI-Assisted Feedback ───────────────────── --}}
-                <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5">
-                    <div class="flex items-start justify-between mb-4">
-                        <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">AI-Assisted Feedback</h2>
-                        <button class="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Info">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
-                        </button>
+                <div x-data="{ showCard: false }" x-init="setTimeout(() => showCard = true, 300)" 
+                     class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 transition-all duration-700 transform hover:shadow-md"
+                     :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                    
+                    <div class="flex items-start justify-between mb-4" x-data="{ showInfo: false }">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center animate-[pulse_3s_ease-in-out_infinite]">
+                                <span class="text-lg">🤖</span>
+                            </div>
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">AI Insight</h2>
+                        </div>
+                        <div class="relative">
+                            <button @mouseenter="showInfo = true" @mouseleave="showInfo = false" @click="showInfo = !showInfo" class="p-1 text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer" title="Info">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
+                            </button>
+                            {{-- Info Popup --}}
+                            <div x-show="showInfo" x-transition.opacity.duration.300ms style="display: none;"
+                                 class="absolute right-0 top-6 z-50 w-64 bg-zinc-900/90 backdrop-blur-md border border-indigo-500/50 rounded-xl p-3.5 shadow-xl shadow-indigo-500/10 pointer-events-none text-left">
+                                <p class="text-[11px] text-zinc-300 leading-relaxed">
+                                    AI akan menganalisis hasil tes Anda dan memberikan umpan balik (feedback) khusus serta menyarankan fokus belajar selanjutnya secara personal.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     @if ($feedback)
-                        <div class="flex gap-4">
-                            {{-- AI Robot avatar --}}
-                            <div class="shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8 1.402 1.402c1 1 .3 2.7-1.1 2.7H3.9c-1.4 0-2.1-1.7-1.1-2.7L4.2 15.3"/>
-                                </svg>
-                            </div>
-
-                            {{-- Content --}}
-                            <div class="flex-1 min-w-0">
-                                <div class="flex flex-wrap items-center gap-2 mb-2">
-                                    <span class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                                        AI Insight
-                                    </span>
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 uppercase">AI-Suggested</span>
-                                    @if ($feedbackAge)
-                                        <span class="text-[11px] text-zinc-400 dark:text-zinc-500">{{ $feedbackAge }}</span>
-                                    @endif
-                                </div>
-
-                                <p class="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{{ $feedback }}</p>
-
-                                @if ($feedbackNextFocus)
-                                    <p class="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                                        Next focus: {{ $feedbackNextFocus }}
-                                    </p>
+                        <div class="mb-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 uppercase border border-indigo-500/30">Priority Insight</span>
+                                @if ($feedbackAge)
+                                    <span class="text-[10px] text-zinc-500">{{ $feedbackAge }}</span>
                                 @endif
+                            </div>
+                            <p class="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">"{{ $feedback }}"</p>
+                        </div>
 
-                                <a href="{{ route('learning-path') }}" wire:navigate
-                                   class="inline-flex items-center gap-1 mt-3 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group">
-                                    View Details
-                                    <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                                </a>
+                        <div class="bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/50 rounded-xl p-4 mb-4">
+                            <p class="text-xs font-semibold text-zinc-600 dark:text-zinc-300 mb-3">Fokus berikutnya:</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs">🎯</span>
+                                            <span class="text-[11px] font-bold text-zinc-800 dark:text-white">Speaking Fluency</span>
+                                        </div>
+                                        <span class="text-[10px] text-zinc-500 dark:text-zinc-400">{{ $skills['speaking'] ?? 10 }}%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-black/10 dark:bg-black/40 rounded-full overflow-hidden">
+                                        <div class="h-full bg-orange-400 rounded-full" style="width: {{ $skills['speaking'] ?? 10 }}%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs">📚</span>
+                                            <span class="text-[11px] font-bold text-zinc-800 dark:text-white">Grammar Structure</span>
+                                        </div>
+                                        <span class="text-[10px] text-zinc-500 dark:text-zinc-400">{{ $skills['grammar'] ?? 20 }}%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-black/10 dark:bg-black/40 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-400 rounded-full" style="width: {{ $skills['grammar'] ?? 20 }}%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs">📖</span>
+                                            <span class="text-[11px] font-bold text-zinc-800 dark:text-white">Vocabulary Range</span>
+                                        </div>
+                                        <span class="text-[10px] text-zinc-500 dark:text-zinc-400">{{ $skills['vocabulary'] ?? 20 }}%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-black/10 dark:bg-black/40 rounded-full overflow-hidden">
+                                        <div class="h-full bg-blue-400 rounded-full" style="width: {{ $skills['vocabulary'] ?? 20 }}%"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        <a href="{{ route('learning-path') }}" wire:navigate
+                           class="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-bold rounded-lg shadow-sm transition-all hover:-translate-y-0.5">
+                            View Learning Plan
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                        </a>
                     @else
-                        <div class="flex flex-col items-center justify-center py-8 text-center">
-                            <div class="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-3">
-                                <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                        <div class="flex flex-col items-center justify-center py-6 text-center">
+                            <div class="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center mb-2">
+                                <svg class="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                             </div>
-                            <p class="text-sm text-zinc-500 dark:text-zinc-400">Belum ada feedback dari AI.</p>
-                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-1">Selesaikan Diagnostic Test untuk mendapat insight.</p>
+                            <p class="text-xs text-zinc-500">Belum ada feedback dari AI. Selesaikan Diagnostic Test.</p>
                         </div>
                     @endif
                 </div>
+
+
+
             </div>
 
+
             {{-- ══════════════════════════════════
-                 RIGHT COLUMN — Adaptive Learning Roadmap
+                 RIGHT COLUMN
                  ══════════════════════════════════ --}}
-            <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 flex flex-col">
-                {{-- Header --}}
-                <div class="flex items-start justify-between mb-4">
-                    <div>
-                        <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">Adaptive Learning Roadmap</h2>
-                    </div>
-                    <button class="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Info">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
-                    </button>
-                </div>
+            <div class="flex flex-col gap-5">
 
-                {{-- Progress bar --}}
-                <div class="mb-5">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Progress</span>
-                        <span class="text-sm font-bold text-zinc-800 dark:text-zinc-100">{{ $progress }}%</span>
-                    </div>
-                    <div class="w-full h-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
-                             style="width: {{ $progress }}%"></div>
-                    </div>
-                </div>
-
-                {{-- Module groups --}}
-                @php
-                    // Kelompokkan modul berdasarkan order_index (bukan level DB enum)
-                    // agar bebas dari constraint enum: basic < 30 | intermediate 30-49 | advanced 50+
-                    $groupedModules = collect($modules)
-                        ->sortBy('order_index')
-                        ->groupBy(function ($m) {
-                            $idx = $m['order_index'] ?? 0;
-                            if ($idx < 30)  return 'basic';
-                            if ($idx < 50)  return 'industry-ready';
-                            return 'employability-oriented';
-                        });
-
-                    $groupLabels = [
-                        'basic'                  => 'Basic',
-                        'industry-ready'         => 'Industry-Ready',
-                        'employability-oriented' => 'Employability-Oriented',
-                    ];
-                    $groupColors = [
-                        'basic'                  => 'text-indigo-600 dark:text-indigo-400',
-                        'industry-ready'         => 'text-emerald-600 dark:text-emerald-400',
-                        'employability-oriented' => 'text-violet-600 dark:text-violet-400',
-                    ];
-                    $groupOrder = ['basic' => 0, 'industry-ready' => 1, 'employability-oriented' => 2];
-                    $groupedModules = $groupedModules->sortBy(fn($g, $k) => $groupOrder[$k] ?? 99);
-                @endphp
-
-                <div class="flex-1 space-y-1 overflow-y-auto pr-1" style="max-height: 440px;">
-                    @forelse ($groupedModules as $groupKey => $groupMods)
-                        {{-- Level section label --}}
-                        <div class="pt-1 pb-1 first:pt-0">
-                            <span class="text-[10px] font-extrabold tracking-widest uppercase {{ $groupColors[$groupKey] ?? 'text-zinc-500' }}">
-                                {{ $groupLabels[$groupKey] ?? strtoupper($groupKey) }}
-                            </span>
+                {{-- ── Learning Path ─────────────────────────────── --}}
+                <div x-data="{ showCard: false }" x-init="setTimeout(() => showCard = true, 200)" 
+                     class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 flex flex-col transition-all duration-700 transform hover:shadow-md"
+                     :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                    
+                    <div class="flex items-start justify-between mb-4" x-data="{ showInfo: false }">
+                        <div>
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">Learning Path</h2>
+                            <p class="text-[11px] text-zinc-500 mt-0.5">Modul pembelajaran yang disesuaikan dengan level Anda</p>
                         </div>
+                        <div class="relative">
+                            <button @mouseenter="showInfo = true" @mouseleave="showInfo = false" @click="showInfo = !showInfo" class="p-1 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer" title="Info">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-4m0-4h.01"/></svg>
+                            </button>
+                            {{-- Info Popup --}}
+                            <div x-show="showInfo" x-transition.opacity.duration.300ms style="display: none;"
+                                 class="absolute right-0 top-6 z-50 w-64 bg-zinc-900/90 backdrop-blur-md border border-emerald-500/50 rounded-xl p-3.5 shadow-xl shadow-emerald-500/10 pointer-events-none text-left">
+                                <p class="text-[11px] text-zinc-300 leading-relaxed">
+                                    Roadmap ini menampilkan urutan modul yang direkomendasikan. Beberapa modul tingkat lanjut akan tetap terkunci hingga Anda menyelesaikan prasyaratnya.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-                        {{-- Module rows --}}
-                        @foreach ($groupMods as $mod)
+                    <div class="flex-1 space-y-2 overflow-y-auto pr-1" style="max-height: 380px;">
+                        @forelse ($modules as $mod)
                             @php
                                 $isCompleted  = $mod['status'] === 'Completed';
                                 $isInProgress = $mod['status'] === 'In Progress';
                                 $isLocked     = $mod['status'] === 'Locked';
                             @endphp
-                            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200
-                                @if ($isCompleted) bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/30
-                                @elseif ($isInProgress) bg-amber-50 dark:bg-amber-900/15 border border-amber-100 dark:border-amber-800/30
-                                @else bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 opacity-60 @endif">
+                            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5
+                                @if ($isCompleted) bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/30 hover:border-emerald-500/50
+                                @elseif ($isInProgress) bg-indigo-50 dark:bg-indigo-900/15 border border-indigo-100 dark:border-indigo-800/30 hover:border-indigo-500/50
+                                @else bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 opacity-70 hover:opacity-100 @endif">
 
-                                {{-- Module icon tile --}}
-                                <div class="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center
-                                    @if($isCompleted) bg-emerald-500/10 dark:bg-emerald-500/15
-                                    @elseif($isInProgress) bg-amber-500/10 dark:bg-amber-500/15
-                                    @else bg-zinc-200 dark:bg-zinc-700 @endif">
+                                {{-- Icon --}}
+                                <div class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+                                    @if($isCompleted) bg-emerald-500/15 text-emerald-400
+                                    @elseif($isInProgress) bg-indigo-500/15 text-indigo-400
+                                    @else bg-zinc-800 text-zinc-500 @endif">
                                     @if ($isCompleted)
-                                        <svg class="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                        </svg>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                     @elseif ($isInProgress)
-                                        <svg class="w-4.5 h-4.5 text-amber-600 dark:text-amber-400" style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        </svg>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     @else
-                                        <svg class="w-4.5 h-4.5 text-zinc-400 dark:text-zinc-500" style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                                        </svg>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                                     @endif
                                 </div>
 
-                                {{-- Module info --}}
+                                {{-- Info --}}
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-semibold truncate
-                                        @if($isLocked) text-zinc-400 dark:text-zinc-500
-                                        @else text-zinc-800 dark:text-zinc-200 @endif">
-                                        {{ $mod['title'] }}
-                                    </p>
-                                    @if ($mod['description'])
-                                        <p class="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{{ $mod['description'] }}</p>
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-sm font-semibold truncate
+                                            @if($isLocked) text-zinc-400 dark:text-zinc-500
+                                            @else text-zinc-800 dark:text-zinc-200 @endif">
+                                            {{ $mod['title'] }}
+                                        </p>
+                                        @if ($isInProgress)
+                                            <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{{ $mod['score'] ?? 0 }}%</span>
+                                        @endif
+                                    </div>
+                                    @if ($isInProgress)
+                                        <div class="mt-1.5 w-full bg-black/10 dark:bg-black/40 rounded-full h-1">
+                                            <div class="bg-indigo-500 dark:bg-indigo-400 h-1 rounded-full transition-all duration-700" style="width: {{ $mod['score'] ?? 0 }}%"></div>
+                                        </div>
+                                    @elseif ($isCompleted)
+                                        <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Completed</p>
+                                    @else
+                                        <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Locked</p>
                                     @endif
                                 </div>
-
-                                {{-- Status indicator --}}
-                                @if ($isCompleted)
-                                    <div class="flex items-center gap-1.5 shrink-0">
-                                        <div class="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm shadow-emerald-500/30">
-                                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                                        </div>
-                                        <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Completed</span>
-                                    </div>
-                                @elseif ($isInProgress)
-                                    <div class="flex items-center gap-1.5 shrink-0">
-                                        <div class="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-400/30"></div>
-                                        <span class="text-xs font-semibold text-amber-600 dark:text-amber-400">In Progress</span>
-                                    </div>
-                                @else
-                                    <div class="flex items-center gap-1.5 shrink-0 opacity-50">
-                                        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                                        <span class="text-xs font-medium text-zinc-400">Locked</span>
-                                    </div>
-                                @endif
                             </div>
-                        @endforeach
-                    @empty
-                        <div class="py-10 text-center text-sm text-zinc-400 dark:text-zinc-500 italic">
-                            Belum ada modul yang tersedia.
-                        </div>
-                    @endforelse
+                        @empty
+                            <div class="py-8 text-center text-sm text-zinc-500 italic">
+                                Belum ada modul yang tersedia.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
 
-                    {{-- ── Final milestone card (Industry-Ready badge) ── --}}
-                    @php $allDone = $progress >= 100; @endphp
-                    <div class="mt-3 rounded-xl p-4 flex items-center gap-3
-                        {{ $allDone
-                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25'
-                            : 'bg-indigo-600/90 dark:bg-indigo-700/80 text-white shadow-sm' }}">
-                        <div class="shrink-0 w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                            @if ($allDone)
-                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>
-                            @else
-                                <svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                            @endif
+                {{-- ── Industry Readiness ───────────────────────── --}}
+                <div x-data="{ showCard: false }" x-init="setTimeout(() => showCard = true, 400)" 
+                     class="bg-gradient-to-br from-white to-indigo-50/50 dark:from-zinc-900 dark:to-indigo-900/30 border border-indigo-200 dark:border-indigo-500/20 rounded-2xl shadow-sm p-5 relative overflow-hidden transition-all duration-700 transform hover:shadow-md"
+                     :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                    <div class="absolute top-0 right-0 p-4 opacity-[0.04]">
+                        <svg class="w-32 h-32 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="text-xl">🚀</span>
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-white tracking-wide">Industry Readiness</h2>
                         </div>
-                        <div>
-                            <p class="text-sm font-bold">{{ $allDone ? '🏆 Selamat! Semua Modul Selesai' : 'Industry-Ready' }}</p>
-                            <p class="text-xs text-white/70">
-                                {{ $allDone ? 'Kamu telah menyelesaikan seluruh learning path!' : 'Unlocks after completing all modules' }}
-                            </p>
+
+                        <div class="mb-4">
+                            <div class="flex justify-between items-end mb-1.5">
+                                <span class="text-[11px] text-indigo-600 dark:text-indigo-200 uppercase tracking-widest font-bold">Overall Progress</span>
+                                <span class="text-lg font-black text-zinc-800 dark:text-white leading-none">{{ $progress }}%</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-zinc-200 dark:bg-black/40 rounded-full overflow-hidden mb-3">
+                                <div class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full transition-all duration-1000" style="width: {{ $progress }}%"></div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-y-3 text-[11px] bg-zinc-50 dark:bg-black/20 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
+                                <div>
+                                    <span class="block text-zinc-500 dark:text-indigo-300/70 mb-0.5">Current:</span>
+                                    <span class="font-bold text-zinc-800 dark:text-white">{{ $overallReadiness ?? 'Basic' }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-zinc-500 dark:text-indigo-300/70 mb-0.5">Completed:</span>
+                                    <span class="font-bold text-zinc-800 dark:text-white">{{ $completedModules }} / {{ $totalModules }} Modules</span>
+                                </div>
+                                <div class="col-span-2 pt-2 border-t border-zinc-200 dark:border-indigo-500/20">
+                                    <span class="block text-zinc-500 dark:text-indigo-300/70 mb-0.5">Next Goal:</span>
+                                    <span class="font-bold text-emerald-600 dark:text-emerald-400">Business Communication Ready</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Mini Statistics --}}
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg p-2 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors">
+                                <div class="flex items-center justify-center mb-0.5">
+                                    <span class="text-[10px]">🔥 Strongest</span>
+                                </div>
+                                <p class="text-[10px] text-center font-semibold text-zinc-700 dark:text-white truncate px-1">{{ $strongestSkill['name'] }}</p>
+                                <p class="text-xs text-center font-black text-orange-500 dark:text-orange-400 mt-0.5">{{ $strongestSkill['score'] }}%</p>
+                            </div>
+                            <div class="bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg p-2 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors">
+                                <div class="flex items-center justify-center mb-0.5">
+                                    <span class="text-[10px]">⚡ Improve</span>
+                                </div>
+                                <p class="text-[10px] text-center font-semibold text-zinc-700 dark:text-white truncate px-1">{{ $weakestSkill['name'] }}</p>
+                                <p class="text-xs text-center font-black text-red-500 dark:text-red-400 mt-0.5">{{ $weakestSkill['score'] }}%</p>
+                            </div>
+                            <div class="bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg p-2 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors">
+                                <div class="flex items-center justify-center mb-0.5">
+                                    <span class="text-[10px]">🎯 Target</span>
+                                </div>
+                                <p class="text-[10px] text-center font-semibold text-zinc-700 dark:text-white truncate px-1">Ready</p>
+                                <p class="text-xs text-center font-black text-emerald-600 dark:text-emerald-400 mt-0.5">80%</p>
+                            </div>
                         </div>
                     </div>
                 </div>
+
             </div>
 
         </div>{{-- end grid --}}
+                {{-- ── Speaking Analysis (Transcript + Word Diff) ─── --}}
+                @if ($speakingTranscript !== null && strlen(trim($speakingTranscript)) > 0)
+                    @php
+                        $spScore = $skills['speaking'] ?? 0;
+                        $spTip = match(true) {
+                            $spScore >= 80 => ['level' => 'Excellent',      'color' => 'emerald', 'emoji' => '🏆', 'tip' => 'Pelafalan Anda sangat baik! AI mendeteksi kefasihan tinggi. Pertahankan dengan latihan percakapan profesional dan diskusi akademik.'],
+                            $spScore >= 60 => ['level' => 'Good',           'color' => 'indigo',  'emoji' => '👍', 'tip' => 'Pelafalan Anda sudah cukup baik. Fokus pada intonasi dan ritme kalimat. Coba baca teks bahasa Inggris dengan lantang setiap hari.'],
+                            $spScore >= 40 => ['level' => 'Fair',           'color' => 'amber',   'emoji' => '📈', 'tip' => 'Ada beberapa bagian yang perlu ditingkatkan. Latih pronunciation dengan mengikuti audio native speaker dan rekam suara Anda sendiri.'],
+                            default        => ['level' => 'Needs Practice', 'color' => 'red',     'emoji' => '💪', 'tip' => 'Mulai dari dasar: latih pelafalan kata per kata dengan kamus audio online, lalu tingkatkan ke kalimat pendek secara bertahap.'],
+                        };
+
+                        // ── Word-diff computation ────────────────────────────────
+                        // Normalize: lowercase, strip punctuation, split to words
+                        $normalizeWords = function(string $text): array {
+                            $text = mb_strtolower(trim($text));
+                            $text = preg_replace('/[^\w\s\']/u', ' ', $text);
+                            return array_values(array_filter(preg_split('/\s+/', $text), fn($w) => $w !== ''));
+                        };
+
+                        // Simple Levenshtein-based similarity (0..1)
+                        $wordSimilarity = function(string $a, string $b): float {
+                            if ($a === $b) return 1.0;
+                            $maxLen = max(strlen($a), strlen($b));
+                            if ($maxLen === 0) return 1.0;
+                            $dist = levenshtein($a, $b);
+                            return 1 - ($dist / $maxLen);
+                        };
+
+                        $transcriptWords = $normalizeWords($speakingTranscript);
+                        $hasReference    = $speakingReference && strlen(trim($speakingReference)) > 0;
+                        $diffResult      = []; // [['word' => string, 'status' => 'correct'|'wrong'|'extra', 'reference' => string]]
+
+                        if ($hasReference) {
+                            $referenceWords = $normalizeWords($speakingReference);
+                            $refSet         = array_flip($referenceWords); // fast lookup
+
+                            foreach ($transcriptWords as $tw) {
+                                if (isset($refSet[$tw])) {
+                                    // Exact match in reference
+                                    $diffResult[] = ['word' => $tw, 'status' => 'correct', 'reference' => ''];
+                                } else {
+                                    // Find closest reference word
+                                    $bestSim   = 0.0;
+                                    $bestRef   = '';
+                                    foreach ($referenceWords as $rw) {
+                                        $sim = $wordSimilarity($tw, $rw);
+                                        if ($sim > $bestSim) {
+                                            $bestSim = $sim;
+                                            $bestRef = $rw;
+                                        }
+                                    }
+                                    if ($bestSim >= 0.65) {
+                                        // Similar — likely mispronounced
+                                        $diffResult[] = ['word' => $tw, 'status' => 'wrong', 'reference' => $bestRef];
+                                    } else {
+                                        // Not in reference at all — extra word
+                                        $diffResult[] = ['word' => $tw, 'status' => 'extra', 'reference' => ''];
+                                    }
+                                }
+                            }
+
+                            $wrongCount   = count(array_filter($diffResult, fn($d) => $d['status'] === 'wrong'));
+                            $correctCount = count(array_filter($diffResult, fn($d) => $d['status'] === 'correct'));
+                            $totalRef     = count($referenceWords);
+                            $rawAccuracy  = $totalRef > 0 ? (int) round($correctCount / $totalRef * 100) : 0;
+                            $accuracyPct  = min($rawAccuracy, 100); // Capped at 100%
+                        }
+                    @endphp
+
+                    <div x-data="{ showCard: false, showFull: false }"
+                         x-init="setTimeout(() => showCard = true, 500)"
+                         class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 transition-all duration-700 transform hover:shadow-md mt-5"
+                         :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+
+                        {{-- Header --}}
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 rounded-full bg-violet-500/10 dark:bg-violet-500/20 flex items-center justify-center">
+                                <span class="text-lg">🎙️</span>
+                            </div>
+                            <div>
+                                <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-tight">Analisis Speaking AI</h2>
+                                <p class="text-[10px] text-zinc-500 dark:text-zinc-400">Transkripsi & koreksi pelafalan dari Whisper AI</p>
+                            </div>
+                        </div>
+
+                        {{-- Score badge --}}
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-bold text-{{ $spTip['color'] }}-600 dark:text-{{ $spTip['color'] }}-400">{{ $spTip['emoji'] }} {{ $spTip['level'] }}</span>
+                                <span class="text-[10px] text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 rounded-full px-2 py-0.5">{{ $speakingWordCount }} kata terdeteksi</span>
+                            </div>
+                            <span class="text-lg font-black text-{{ $spTip['color'] }}-500">{{ $spScore }}%</span>
+                        </div>
+
+                        {{-- Score progress bar --}}
+                        <div class="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden mb-4">
+                            <div class="h-full rounded-full transition-all duration-1000
+                                @if($spScore >= 80) bg-gradient-to-r from-emerald-400 to-emerald-500
+                                @elseif($spScore >= 60) bg-gradient-to-r from-indigo-400 to-indigo-500
+                                @elseif($spScore >= 40) bg-gradient-to-r from-amber-400 to-amber-500
+                                @else bg-gradient-to-r from-red-400 to-red-500 @endif"
+                                 style="width: {{ $spScore }}%">
+                            </div>
+                        </div>
+
+                        @if ($hasReference && count($diffResult) > 0)
+                            {{-- ── Accuracy badge (with reference) ──────────── --}}
+                            <div class="flex items-center gap-3 mb-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
+                                <div class="flex-1 flex flex-wrap gap-2 text-[10px]">
+                                    <span class="flex items-center gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-full px-2 py-0.5 font-semibold">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                                        {{ count(array_filter($diffResult, fn($d) => $d['status'] === 'correct')) }} benar
+                                    </span>
+                                    <span class="flex items-center gap-1 bg-red-500/10 text-red-700 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+                                        {{ $wrongCount }} salah ucap
+                                    </span>
+                                    <span class="flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
+                                        {{ count(array_filter($diffResult, fn($d) => $d['status'] === 'extra')) }} kata tambahan
+                                    </span>
+                                </div>
+                            </div>
+
+                            {{-- ── Word-diff transcript ──────────────────────── --}}
+                            <div class="bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 mb-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse inline-block"></span>
+                                        <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Transkripsi Whisper AI</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[9px] text-zinc-400">
+                                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-emerald-500/30 border border-emerald-500 inline-block"></span>Benar</span>
+                                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-500/30 border border-red-500 inline-block"></span>Salah</span>
+                                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-amber-500/30 border border-amber-500 inline-block"></span>Tambahan</span>
+                                    </div>
+                                </div>
+                                <div class="text-[13px] leading-loose flex flex-wrap gap-x-1 gap-y-0.5"
+                                     x-show="showFull || {{ count($diffResult) <= 40 ? 'true' : 'false' }}">
+                                    @foreach($diffResult as $dw)
+                                        @if($dw['status'] === 'correct')
+                                            <span class="px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium" title="✓ Benar">{{ $dw['word'] }}</span>
+                                        @elseif($dw['status'] === 'wrong')
+                                            <span class="relative inline-block group">
+                                                <span class="px-1 py-0.5 rounded bg-red-500/15 text-red-700 dark:text-red-300 font-semibold underline decoration-red-500 decoration-dotted cursor-help">{{ $dw['word'] }}</span>
+                                                <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+                                                    <span class="bg-zinc-900 text-white text-[10px] font-semibold rounded-lg px-2 py-1 whitespace-nowrap shadow-lg">
+                                                        Maksud: <span class="text-emerald-400">{{ $dw['reference'] }}</span>
+                                                    </span>
+                                                    <span class="w-2 h-2 bg-zinc-900 rotate-45 -mt-1"></span>
+                                                </span>
+                                            </span>
+                                        @else
+                                            <span class="px-1 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 italic text-[12px]" title="Kata tambahan">{{ $dw['word'] }}</span>
+                                        @endif
+                                    @endforeach
+                                </div>
+                                @if(count($diffResult) > 40)
+                                    <div x-show="!showFull" class="text-[13px] leading-loose flex flex-wrap gap-x-1 gap-y-0.5">
+                                        @foreach(array_slice($diffResult, 0, 40) as $dw)
+                                            @if($dw['status'] === 'correct')
+                                                <span class="px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">{{ $dw['word'] }}</span>
+                                            @elseif($dw['status'] === 'wrong')
+                                                <span class="relative inline-block group">
+                                                    <span class="px-1 py-0.5 rounded bg-red-500/15 text-red-700 dark:text-red-300 font-semibold underline decoration-red-500 decoration-dotted cursor-help">{{ $dw['word'] }}</span>
+                                                    <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+                                                        <span class="bg-zinc-900 text-white text-[10px] font-semibold rounded-lg px-2 py-1 whitespace-nowrap shadow-lg">
+                                                            Maksud: <span class="text-emerald-400">{{ $dw['reference'] }}</span>
+                                                        </span>
+                                                        <span class="w-2 h-2 bg-zinc-900 rotate-45 -mt-1"></span>
+                                                    </span>
+                                                </span>
+                                            @else
+                                                <span class="px-1 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 italic text-[12px]">{{ $dw['word'] }}</span>
+                                            @endif
+                                        @endforeach
+                                        <span class="text-zinc-400 italic">…</span>
+                                    </div>
+                                    <button @click="showFull = !showFull"
+                                            class="mt-2 text-[11px] text-violet-600 dark:text-violet-400 font-semibold hover:underline focus:outline-none"
+                                            x-text="showFull ? 'Tampilkan lebih sedikit ↑' : 'Tampilkan semua ↓'">
+                                    </button>
+                                @endif
+                            </div>
+
+                            {{-- ── Mispronounced words detail ────────────────── --}}
+                            @php $wrongWords = array_values(array_filter($diffResult, fn($d) => $d['status'] === 'wrong')); @endphp
+                            @if(count($wrongWords) > 0)
+                                <div class="mb-3 p-3 bg-red-500/5 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl">
+                                    <p class="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase tracking-wide mb-2">⚠️ Kata yang Perlu Diperbaiki Pelafalannya</p>
+                                    <div class="space-y-1.5">
+                                        @foreach($wrongWords as $ww)
+                                            <div class="flex items-center gap-2 text-[11px]">
+                                                <span class="px-2 py-0.5 bg-red-500/15 text-red-700 dark:text-red-300 rounded font-mono font-bold min-w-[80px]">{{ $ww['word'] }}</span>
+                                                <span class="text-zinc-400">→</span>
+                                                <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded font-mono font-bold">{{ $ww['reference'] }}</span>
+                                                <span class="text-zinc-500 text-[10px]">(seharusnya)</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
+                        @else
+                            {{-- ── Plain transcript (no reference) ──────────── --}}
+                            <div class="bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 mb-3">
+                                <div class="flex items-center gap-1.5 mb-2">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse inline-block"></span>
+                                    <span class="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Transkripsi Whisper AI</span>
+                                </div>
+                                <p class="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed italic"
+                                   x-show="showFull || {{ strlen(trim($speakingTranscript)) <= 200 ? 'true' : 'false' }}">"{{ trim($speakingTranscript) }}"</p>
+                                @if(strlen(trim($speakingTranscript)) > 200)
+                                    <p class="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed italic"
+                                       x-show="!showFull">"{{ mb_substr(trim($speakingTranscript), 0, 200) }}…"</p>
+                                    <button @click="showFull = !showFull"
+                                            class="mt-2 text-[11px] text-violet-600 dark:text-violet-400 font-semibold hover:underline focus:outline-none"
+                                            x-text="showFull ? 'Tampilkan lebih sedikit ↑' : 'Tampilkan semua ↓'">
+                                    </button>
+                                @endif
+                                <p class="text-[10px] text-zinc-400 italic mt-3 border-t border-zinc-200 dark:border-zinc-800 pt-2">
+                                    💡 Isi <strong>Teks Referensi</strong> di Diagnostic Test berikutnya untuk melihat koreksi kata per kata.
+                                </p>
+                            </div>
+                        @endif
+
+                        {{-- Pronunciation tip --}}
+                        <div class="flex gap-2.5 p-3 bg-{{ $spTip['color'] }}-50 dark:bg-{{ $spTip['color'] }}-900/15 border border-{{ $spTip['color'] }}-200 dark:border-{{ $spTip['color'] }}-800/30 rounded-xl">
+                            <span class="text-base shrink-0 mt-0.5">💡</span>
+                            <div>
+                                <p class="text-[10px] font-bold text-{{ $spTip['color'] }}-700 dark:text-{{ $spTip['color'] }}-400 uppercase tracking-wide mb-0.5">Tips Pelafalan</p>
+                                <p class="text-[12px] text-{{ $spTip['color'] }}-800 dark:text-{{ $spTip['color'] }}-300 leading-relaxed">{{ $spTip['tip'] }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                @elseif (!$speakingProcessing && ($skills['speaking'] ?? 0) === 0)
+                    {{-- No audio was submitted --}}
+                    <div x-data="{ showCard: false }" x-init="setTimeout(() => showCard = true, 500)"
+                         class="bg-white dark:bg-zinc-900 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 transition-all duration-700 transform mt-5"
+                         :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-lg">🎙️</span>
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100">Analisis Speaking AI</h2>
+                        </div>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Anda tidak mengirimkan rekaman audio pada Diagnostic Test terakhir, sehingga tidak ada transkripsi untuk ditampilkan.</p>
+                        <a href="{{ route('diagnostic') }}" wire:navigate
+                           class="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all hover:scale-[1.02]">
+                            🎙️ Ikuti Tes dengan Audio
+                        </a>
+                    </div>
+                @endif
+
+                {{-- ── Performance History Chart ──────────────────── --}}
+                <div x-data="{
+                        showCard: false,
+                        initHistoryChart() {
+                            if (typeof Chart === 'undefined') {
+                                setTimeout(() => this.initHistoryChart(), 100);
+                                return;
+                            }
+                            
+                            const data = @js($performanceChartData);
+                            if(!data || !data.labels || data.labels.length === 0) return;
+                            
+                            new Chart(this.$refs.historyCanvas, {
+                                type: 'line',
+                                data: {
+                                    labels: data.labels,
+                                    datasets: [
+                                        {
+                                            label: 'Overall',
+                                            data: data.overall,
+                                            borderColor: 'rgba(167, 139, 250, 1)', // violet-400
+                                            backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                                            borderWidth: 3,
+                                            tension: 0,
+                                            fill: true,
+                                            pointBackgroundColor: 'rgba(167, 139, 250, 1)'
+                                        },
+                                        {
+                                            label: 'Speaking',
+                                            data: data.speaking,
+                                            borderColor: 'rgba(249, 115, 22, 1)', // orange-500
+                                            borderWidth: 2,
+                                            tension: 0,
+                                            hidden: true,
+                                            pointBackgroundColor: 'rgba(249, 115, 22, 1)'
+                                        },
+                                        {
+                                            label: 'Grammar',
+                                            data: data.grammar,
+                                            borderColor: 'rgba(16, 185, 129, 1)', // emerald-500
+                                            borderWidth: 2,
+                                            tension: 0,
+                                            hidden: true,
+                                            pointBackgroundColor: 'rgba(16, 185, 129, 1)'
+                                        },
+                                        {
+                                            label: 'Vocabulary',
+                                            data: data.vocabulary,
+                                            borderColor: 'rgba(34, 211, 238, 1)', // cyan-400
+                                            borderWidth: 2,
+                                            tension: 0,
+                                            hidden: true,
+                                            pointBackgroundColor: 'rgba(34, 211, 238, 1)'
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top',
+                                            labels: {
+                                                color: '#a1a1aa',
+                                                usePointStyle: true,
+                                                padding: 20,
+                                                font: { size: 12, weight: '600' }
+                                            }
+                                        },
+                                        tooltip: {
+                                            mode: 'index',
+                                            intersect: false,
+                                            backgroundColor: 'rgba(24, 24, 27, 0.9)', // zinc-900
+                                            titleColor: '#fff',
+                                            bodyColor: '#e4e4e7', // zinc-200
+                                            borderColor: 'rgba(63, 63, 70, 0.5)', // zinc-700
+                                            borderWidth: 1,
+                                            padding: 10
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 100,
+                                            grid: {
+                                                color: 'rgba(161, 161, 170, 0.1)',
+                                                drawBorder: false
+                                            },
+                                            ticks: {
+                                                color: '#a1a1aa',
+                                                stepSize: 20
+                                            }
+                                        },
+                                        x: {
+                                            grid: {
+                                                display: false,
+                                                drawBorder: false
+                                            },
+                                            ticks: {
+                                                color: '#a1a1aa'
+                                            }
+                                        }
+                                    },
+                                    interaction: {
+                                        mode: 'nearest',
+                                        axis: 'x',
+                                        intersect: false
+                                    }
+                                }
+                            });
+                        }
+                    }"
+                    x-init="setTimeout(() => showCard = true, 600); initHistoryChart()"
+                    class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 transition-all duration-700 transform mt-5"
+                    :class="showCard ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'"
+                >
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-8 h-8 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
+                            <span class="text-lg">📈</span>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-tight">Diagnostic Progress History</h2>
+                            <p class="text-[10px] text-zinc-500 dark:text-zinc-400">Perkembangan skor test Anda dari waktu ke waktu</p>
+                        </div>
+                    </div>
+                    
+                    <div class="w-full h-[300px]">
+                        <canvas x-ref="historyCanvas"></canvas>
+                    </div>
+                </div>
+
     @endif
 
-
+    @assets
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    @endassets
 </div>

@@ -58,13 +58,15 @@ class FeedbackService
      * @var array<string, string>
      */
     private array $pathNextFocus = [
-        'emergency_foundation'      => 'pondasi Bahasa Inggris dasar',
-        'fundamental_communication' => 'komunikasi sehari-hari yang lancar',
-        'basic_speaking'            => 'kelancaran berbicara',
-        'grammar_foundation'        => 'penguatan grammar',
-        'vocabulary_builder'        => 'memperkaya kosakata',
+        // === 5 Path dari APELS-EXECUTION-SPEC §8 ===
+        'fundamental_communication' => 'komunikasi dasar dan kelancaran berbicara',
+        'basic_speaking'            => 'kelancaran berbicara dan kepercayaan diri',
+        'grammar_foundation'        => 'penguatan grammar dan struktur kalimat',
+        'professional_simulation'   => 'simulasi profesional Accounting Communication',
         'intermediate_path'         => 'kemampuan menengah dan business writing',
-        'professional_simulation'   => 'simulasi profesional Financial Presentation dan Client Meeting',
+        // === Legacy paths (backward compat) ===
+        'emergency_foundation'      => 'pondasi Bahasa Inggris dasar',
+        'vocabulary_builder'        => 'memperkaya kosakata',
         'industry_ready'            => 'kesiapan industri dengan negosiasi tingkat lanjut',
     ];
 

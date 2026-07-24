@@ -27,6 +27,12 @@ use Illuminate\Support\Facades\Log;
  */
 class DiagnosticService
 {
+    /**
+     * Urutan SET yang dirotasi (APELS-EXECUTION-SPEC §4).
+     * Attempt ke-1 → A, ke-2 → B, ke-3 → C, ke-4 → A, dst.
+     */
+    private const SETS = ['A', 'B', 'C'];
+
     public function __construct(
         private NlpAnalysisService $nlpService,
         private ScoringService $scoringService,
@@ -35,60 +41,102 @@ class DiagnosticService
     ) {}
 
     /**
+     * Tentukan SET aktif berdasarkan jumlah attempt sebelumnya.
+     * Rotasi: attempt%3 → index SET (Req §4).
+     */
+    public function resolveActiveSet(int $userId): string
+    {
+        $attempt = DiagnosticResult::where('user_id', $userId)->count();
+        return self::SETS[$attempt % count(self::SETS)];
+    }
+
+    /**
+     * Nomor attempt berikutnya (1-indexed).
+     */
+    public function nextAttemptNumber(int $userId): int
+    {
+        return DiagnosticResult::where('user_id', $userId)->count() + 1;
+    }
+
+    /**
      * Process a Diagnostic Test submission.
      *
      * @param  int    $userId
-     * @param  array  $input  Keys: text_answers (array<string>), audio_path (string|null)
+     * @param  array  $input  Keys:
+     *                          grammar_score (int, 0-100) — dihitung oleh ScoringService di frontend
+     *                          vocab_score (int, 0-100)   — dihitung oleh ScoringService di frontend
+     *                          audio_path (string|null)
+     *                          answers (array|null)       — jawaban mentah untuk disimpan
+     *                          [LEGACY] text_answers (array<string>) — jika masuk via API lama
      * @return array{diagnostic_id: int, grammar: int, vocabulary: int, message: string}
      */
     public function process(int $userId, array $input): array
     {
-        $textAnswers = $input['text_answers'] ?? [];
-        $audioPath   = $input['audio_path'] ?? null;
+        $audioPath         = $input['audio_path']         ?? null;
+        $speakingReference = $input['speaking_reference'] ?? null;
 
-        // 1. NLP analysis (sync) — fallback to 0 on failure (Req 4.6, 27.2)
-        try {
-            $nlpResult = $this->nlpService->analyze($textAnswers);
-        } catch (\Throwable $e) {
-            Log::error('DiagnosticService::process — NLP failed, using fallback', [
-                'user_id' => $userId,
-                'error'   => $e->getMessage(),
-            ]);
-            $nlpResult = ['grammar_score' => 0, 'vocab_score' => 0];
+        // Jika skor sudah dihitung di frontend (alur MCQ baru), gunakan langsung.
+        // Jika tidak (alur API lama/legacy), fallback ke NLP.
+        if (isset($input['grammar_score']) && isset($input['vocab_score'])) {
+            $grammar    = (int) $input['grammar_score'];
+            $vocabulary = (int) $input['vocab_score'];
+        } else {
+            // LEGACY: NLP analysis (sync) — untuk backward compat API lama
+            $textAnswers = $input['text_answers'] ?? [];
+            try {
+                $nlpResult = $this->nlpService->analyze($textAnswers);
+            } catch (\Throwable $e) {
+                Log::error('DiagnosticService::process — NLP failed, using fallback', [
+                    'user_id' => $userId,
+                    'error'   => $e->getMessage(),
+                ]);
+                $nlpResult = ['grammar_score' => 0, 'vocab_score' => 0];
+            }
+            $grammar    = $nlpResult['grammar_score'];
+            $vocabulary = $nlpResult['vocab_score'];
         }
 
-        $grammar    = $nlpResult['grammar_score'];
-        $vocabulary = $nlpResult['vocab_score'];
 
         // 2. Create DiagnosticResult (Req 4.2)
-        $attempt = DiagnosticResult::where('user_id', $userId)->count() + 1;
+        $setUsed       = $this->resolveActiveSet($userId);
+        $attemptNumber = $this->nextAttemptNumber($userId);
+        $attempt       = $attemptNumber; // backward compat dengan kolom 'attempt' lama
 
         $diagnostic = DiagnosticResult::create([
             'user_id'               => $userId,
+            'set_used'              => $setUsed,
+            'attempt_number'        => $attemptNumber,
             'grammar'               => $grammar,
             'vocabulary'            => $vocabulary,
             'speaking'              => 0,
             'overall'               => 0,
             'attempt'               => $attempt,
             'audio_path'            => $audioPath,
+            'speaking_reference'    => $speakingReference,
             'is_speaking_processed' => false,
+            'answers'               => $input['answers'] ?? null,
         ]);
 
         // 3. Dispatch async job or run sync (Req 4.3, 4.4)
         if ($audioPath) {
-            // Process speaking evaluation synchronously with a mock fallback to avoid API delay/errors
+            // Process speaking evaluation synchronously
             try {
-                $stt = app(SpeechToTextService::class);
-                $score = $stt->analyze($audioPath);
-                if ($score === 0) {
-                    $score = rand(70, 85);
-                }
+                $stt    = app(SpeechToTextService::class);
+                $result = $stt->analyze($audioPath);
+                $score      = $result['score'];
+                $transcript = $result['transcript'];
             } catch (\Throwable $e) {
-                $score = rand(70, 85);
+                Log::error('DiagnosticService::process — STT failed', [
+                    'user_id' => $userId,
+                    'error'   => $e->getMessage(),
+                ]);
+                $score      = 0;
+                $transcript = '';
             }
 
             $diagnostic->update([
                 'speaking'               => $score,
+                'speaking_transcript'    => $transcript,
                 'is_speaking_processed'  => true,
             ]);
 
@@ -107,6 +155,7 @@ class DiagnosticService
             $diagnostic->update(['is_speaking_processed' => true]);
             $this->runEngineAndFeedback($userId, $diagnostic->fresh());
         }
+
 
         // 4. Return response data (Req 4.5)
         return [

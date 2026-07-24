@@ -15,7 +15,7 @@ use League\Csv\Writer;
 class CsvQuestionExporter
 {
     public const HEADERS = [
-        'question', 'option_a', 'option_b', 'option_c', 'option_d',
+        'set', 'question', 'option_a', 'option_b', 'option_c', 'option_d',
         'correct_answer', 'type', 'tag', 'difficulty',
     ];
 
@@ -34,6 +34,7 @@ class CsvQuestionExporter
         foreach ($questions as $question) {
             $row = is_array($question) ? $question : $question->toArray();
             $writer->insertOne([
+                $row['set'] ?? '',
                 $row['question'] ?? '',
                 $row['option_a'] ?? '',
                 $row['option_b'] ?? '',

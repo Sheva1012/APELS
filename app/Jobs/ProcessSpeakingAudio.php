@@ -44,13 +44,16 @@ class ProcessSpeakingAudio implements ShouldQueue
      */
     public function handle(SpeechToTextService $stt, DiagnosticService $diagnosticService): void
     {
-        // 1. Get speaking score from Whisper
-        $score = $stt->analyze($this->audioPath);
+        // 1. Get speaking score + transcript from Whisper
+        $result     = $stt->analyze($this->audioPath);
+        $score      = $result['score'];
+        $transcript = $result['transcript'];
 
         // 2. Update DiagnosticResult (Req 6.4)
         $diagnostic = DiagnosticResult::findOrFail($this->diagnosticId);
         $diagnostic->update([
             'speaking'               => $score,
+            'speaking_transcript'    => $transcript,
             'is_speaking_processed'  => true,
         ]);
 
@@ -75,8 +78,9 @@ class ProcessSpeakingAudio implements ShouldQueue
 
         // Set speaking=0, mark as processed so UI doesn't hang
         DiagnosticResult::where('id', $this->diagnosticId)->update([
-            'speaking'              => 0,
-            'is_speaking_processed' => true,
+            'speaking'               => 0,
+            'speaking_transcript'    => '',
+            'is_speaking_processed'  => true,
         ]);
 
         // Still run engine with score 0 so student gets a path

@@ -11,10 +11,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Eloquent model untuk tabel `modules` (Req 10.7, 30.4).
  *
  * Field utama:
- *   - title, description, path_key, level, tag, order_index, content (JSON), is_active.
+ *   - title, description, path_key, level, tag, order_index, is_active.
  *
  * Cast:
- *   - `content` => array (JSON di DB).
  *   - `is_active` => boolean.
  *   - `order_index` => integer untuk sort Learning Roadmap (Req 14.1).
  *
@@ -34,15 +33,23 @@ class Module extends Model
         'level',
         'tag',
         'order_index',
-        'content',
         'is_active',
     ];
 
     protected $casts = [
-        'content' => 'array',
         'is_active' => 'boolean',
         'order_index' => 'integer',
     ];
+
+    /**
+     * Lessons within this module.
+     *
+     * @return HasMany<Lesson, $this>
+     */
+    public function lessons(): HasMany
+    {
+        return $this->hasMany(Lesson::class)->orderBy('order_index');
+    }
 
     /**
      * Progress per mahasiswa untuk modul ini.

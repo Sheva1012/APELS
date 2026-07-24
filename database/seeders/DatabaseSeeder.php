@@ -16,12 +16,7 @@ class DatabaseSeeder extends Seeder
         // Bootstrap role + permission terlebih dulu (Req 2.1, 2.7-2.9).
         $this->call(RoleSeeder::class);
 
-        // Modul MVP (Financial Presentation, Client Meeting) + basic placeholder
-        // (Req 10.2, 11.1, 11.2, 11.3).
-        $this->call(ModuleSeeder::class);
-
-        // Seed sample questions
-        $this->call(QuestionSeeder::class);
+        // Modul dan Question data dummy dihapus karena user akan menginput manual.
 
         // User::factory(10)->create();
 
@@ -40,19 +35,7 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        // Create Default Test User
-        $testUser = User::where('email', 'test@example.com')->first();
-        if (!$testUser) {
-            $testUser = User::factory()->create([
-                'name' => 'Test User',
-                'email' => 'test@example.com',
-            ]);
-            $testUser->assignRole('mahasiswa');
-        } else {
-            if (!$testUser->hasRole('mahasiswa')) {
-                $testUser->assignRole('mahasiswa');
-            }
-        }
+        // Create Default Test User dihapus
     }
 }
 

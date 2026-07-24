@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ModuleResource\Pages;
+use App\Filament\Resources\ModuleResource\RelationManagers;
 use App\Models\Module;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -35,12 +36,11 @@ class ModuleResource extends Resource
             Forms\Components\Select::make('path_key')->label('Learning Path')
                 ->options($pathOptions)->required()->searchable(),
             Forms\Components\Select::make('level')
-                ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced','professional'=>'Professional'])
+                ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])
                 ->required(),
             Forms\Components\Select::make('tag')
-                ->options(['basic'=>'Basic','advanced'=>'Advanced'])->required(),
+                ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])->required(),
             Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
-            Forms\Components\KeyValue::make('content')->label('Content (JSON)'),
             Forms\Components\Toggle::make('is_active')->default(true),
         ]);
     }
@@ -60,11 +60,18 @@ class ModuleResource extends Resource
             ->defaultSort('order_index')
             ->filters([
                 Tables\Filters\SelectFilter::make('level')
-                    ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced','professional'=>'Professional']),
+                    ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->actions([\Filament\Actions\EditAction::make()])
-            ->bulkActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
+            ->recordActions([\Filament\Actions\EditAction::make()])
+            ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RelationManagers\LessonsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

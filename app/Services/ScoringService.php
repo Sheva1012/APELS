@@ -31,6 +31,40 @@ class ScoringService
     ];
 
     /**
+     * Hitung skor satu seksi (Grammar atau Vocabulary) berbasis bobot difficulty (APELS-EXECUTION-SPEC §7).
+     *
+     * Formula:
+     *   total_bobot = sum(question.difficulty)
+     *   earned = sum(difficulty) untuk jawaban benar
+     *   score = round((earned / total_bobot) * 100)
+     *
+     * Grammar  : total bobot = 18 (3×1 + 3×2 + 3×3)
+     * Vocabulary: total bobot = 21 (4×1 + 4×2 + 3×3)
+     *
+     * @param  \Illuminate\Support\Collection  $questions  Koleksi Question model/array dengan key difficulty, id, correct_answer.
+     * @param  array<int|string, string>       $answers    Map questionId => jawaban user ('a'/'b'/'c'/'d').
+     * @return int                                          Skor 0–100.
+     */
+    public function scoreSection(\Illuminate\Support\Collection $questions, array $answers): int
+    {
+        $earned = 0;
+        $total  = $questions->sum(fn($q) => is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty);
+
+        foreach ($questions as $q) {
+            $qId     = is_array($q) ? $q['id'] : $q->id;
+            $correct = is_array($q) ? ($q['correct_answer'] ?? '') : $q->correct_answer;
+            $given   = $answers[$qId] ?? null;
+
+            if ($given !== null && strtolower($given) === strtolower($correct)) {
+                $difficulty = is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty;
+                $earned += $difficulty;
+            }
+        }
+
+        return $total > 0 ? (int) round(($earned / $total) * 100) : 0;
+    }
+
+    /**
      * Hitung overall score sebagai weighted average.
      *
      * - Skor key absent diperlakukan sebagai 0 (Req 8.4).

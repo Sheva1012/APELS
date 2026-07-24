@@ -16,6 +16,7 @@ class Question extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'set',
         'question',
         'option_a',
         'option_b',
@@ -60,5 +61,13 @@ class Question extends Model
     public function scopeByTag(Builder $query, string $tag): Builder
     {
         return $query->where('tag', $tag);
+    }
+
+    /**
+     * Filter soal berdasarkan set (`A`, `B`, atau `C`) — dipakai DiagnosticService.
+     */
+    public function scopeBySet(Builder $query, string $set): Builder
+    {
+        return $query->where('set', $set);
     }
 }

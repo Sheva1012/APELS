@@ -14,12 +14,18 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth', 'role:mahasiswa', 'daily.test.limit'])->group(function () {
+Route::middleware(['web', 'auth', 'role:mahasiswa', 'daily.test.limit'])->group(function () {
     Route::post('diagnostic/submit', [DiagnosticController::class, 'submit'])
         ->name('api.diagnostic.submit');
 });
 
-Route::middleware(['auth', 'role:mahasiswa'])->group(function () {
+Route::middleware(['web', 'auth', 'role:mahasiswa'])->group(function () {
+    Route::get('diagnostic/start', [DiagnosticController::class, 'start'])
+        ->name('api.diagnostic.start');
+});
+
+
+Route::middleware(['web', 'auth', 'role:mahasiswa'])->group(function () {
     Route::get('dashboard', [ApiController::class, 'dashboard'])
         ->name('api.dashboard');
     Route::get('learning-path', [ApiController::class, 'learningPath'])
@@ -28,7 +34,7 @@ Route::middleware(['auth', 'role:mahasiswa'])->group(function () {
         ->name('api.feedback');
 });
 
-Route::middleware(['auth', 'role:admin|dosen'])->group(function () {
+Route::middleware(['web', 'auth', 'role:admin|dosen'])->group(function () {
     Route::post('questions', [ApiController::class, 'createQuestion'])
         ->name('api.questions.create');
 });

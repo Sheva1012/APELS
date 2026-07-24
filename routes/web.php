@@ -32,7 +32,9 @@ Route::middleware(['auth', 'role:mahasiswa'])->group(function () {
 
     Volt::route('learning-path', 'student.learning-path')->name('learning-path');
     Volt::route('learning-path/{module}', 'student.module-detail')->name('module-detail');
+    Volt::route('lesson/{lesson}', 'student.lesson-detail')->name('lesson-detail');
     Volt::route('exercises/{module}', 'student.exercise')->name('exercises');
+    Volt::route('test-history', 'student.test-history')->name('test-history');
 
     // Diagnostic Test — tambahan middleware daily.test.limit (Req 3)
     Route::middleware(['daily.test.limit'])->group(function () {

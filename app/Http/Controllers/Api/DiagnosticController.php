@@ -4,17 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SubmitDiagnosticRequest;
+use App\Models\Question;
 use App\Services\DiagnosticService;
 use App\Support\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * DiagnosticController — API endpoint for Diagnostic Test submission.
+ * DiagnosticController — API endpoints for Diagnostic Test.
  *
- * POST /api/diagnostic/submit
- * Middleware: auth:sanctum, role:mahasiswa, daily.test.limit
+ * GET  /api/diagnostic/start  → Ambil soal untuk attempt berikutnya (spec §10)
+ * POST /api/diagnostic/submit → Submit jawaban dan audio (spec §10)
  *
- * Requirements: 4.5, 5.5, 17.1, 17.4, 23.1
+ * Middleware: auth:sanctum/web, role:mahasiswa, daily.test.limit (submit)
  */
 class DiagnosticController extends Controller
 {
@@ -23,6 +25,39 @@ class DiagnosticController extends Controller
     ) {}
 
     /**
+     * GET /api/diagnostic/start
+     * Return active SET, attempt number, and questions for next diagnostic.
+     * Spec §10: response shape {set, attempt_number, grammar_questions, vocab_questions}
+     */
+    public function start(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $activeSet     = $this->diagnosticService->resolveActiveSet($userId);
+        $attemptNumber = $this->diagnosticService->nextAttemptNumber($userId);
+
+        $grammarQs = Question::active()
+            ->bySet($activeSet)
+            ->byType('grammar')
+            ->orderBy('difficulty')
+            ->get(['id', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'tag', 'difficulty']);
+
+        $vocabQs = Question::active()
+            ->bySet($activeSet)
+            ->byType('vocabulary')
+            ->orderBy('difficulty')
+            ->get(['id', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'tag', 'difficulty']);
+
+        return ApiResponse::success('Diagnostic session started', [
+            'set'               => $activeSet,
+            'attempt_number'    => $attemptNumber,
+            'grammar_questions' => $grammarQs,
+            'vocab_questions'   => $vocabQs,
+        ]);
+    }
+
+    /**
+     * POST /api/diagnostic/submit
      * Handle Diagnostic Test submission.
      */
     public function submit(SubmitDiagnosticRequest $request): \Illuminate\Http\JsonResponse

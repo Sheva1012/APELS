@@ -28,6 +28,8 @@
     --color-accent-foreground: var(--color-white);
 
     --animate-shimmer: shimmer 2.5s infinite;
+    --animate-fade-in-up: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    --animate-fade-in: fadeIn 1s ease-out forwards;
 
     @keyframes shimmer {
         from {
@@ -35,6 +37,26 @@
         }
         to {
             transform: translateX(100%);
+        }
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
         }
     }
 }
@@ -75,3 +97,46 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* ── Responsive full-width layout fix ─────────────────────────── */
+html, body {
+    width: 100%;
+    min-height: 100%;
+}
+
+/* Force the body grid to span the full viewport and override Flux defaults */
+body:has([data-flux-sidebar]) {
+    display: grid !important;
+    grid-template-columns: var(--sidebar-width, 256px) 1fr !important;
+    grid-template-rows: 1fr !important;
+    grid-template-areas: "sidebar main" !important;
+    width: 100% !important;
+    min-height: 100dvh !important;
+}
+
+/* Override the sidebar grid-area so it sits in column 1 */
+[data-flux-sidebar] {
+    grid-area: sidebar !important;
+    width: 256px !important;
+    max-width: 256px !important;
+}
+
+/* Force main area to fill ALL remaining space */
+[data-flux-main] {
+    grid-area: main !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: visible;
+}
+
+/* Mobile: sidebar is hidden (fixed/absolute), main takes full width */
+@media (max-width: 1024px) {
+    body:has([data-flux-sidebar]) {
+        grid-template-columns: 1fr !important;
+        grid-template-areas: "main" !important;
+    }
+    [data-flux-sidebar] {
+        position: fixed !important;
+        z-index: 50 !important;
+    }
+}

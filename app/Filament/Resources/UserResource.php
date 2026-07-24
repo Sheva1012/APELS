@@ -60,11 +60,11 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('roles.name')->label('Role')->badge(),
                 Tables\Columns\TextColumn::make('created_at')->dateTime('d M Y')->sortable(),
             ])
-            ->actions([
+            ->recordActions([
                 \Filament\Actions\EditAction::make(),
                 \Filament\Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
+            ->toolbarActions([
                 \Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()]),
             ]);
     }

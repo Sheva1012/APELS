@@ -16,103 +16,120 @@
             })();
         </script>
     </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky stashable class="border-r border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-            <flux:sidebar.toggle class="lg:hidden" icon="x-mark" />
+    <body class="min-h-screen w-full bg-white dark:bg-zinc-800">
+        <flux:sidebar sticky stashable class="border-r-0 bg-[#0a192f] text-white w-64">
+            <flux:sidebar.toggle class="lg:hidden text-white" icon="x-mark" />
 
-            <a href="{{ route('home') }}" class="mr-5 flex items-center space-x-2" wire:navigate>
-                <x-app-logo class="size-8" href="#"></x-app-logo>
+            <!-- Logo Section -->
+            <a href="{{ route('home') }}" class="flex flex-col items-center mt-4 mb-4 w-full" wire:navigate>
+                <div class="flex items-center space-x-2 mb-1">
+                    <x-app-logo class="size-7 text-blue-500"></x-app-logo>
+                </div>
+                <div class="text-center text-[10px] text-blue-200/70 font-medium tracking-wide leading-tight">
+                    AI-Powered English<br>Learning System
+                </div>
             </a>
 
-            <flux:navlist variant="outline">
-                <flux:navlist.group heading="Platform" class="grid">
-                    @if(auth()->user()->hasRole('mahasiswa'))
-                        <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>Dashboard</flux:navlist.item>
-                        <flux:navlist.item icon="book-open-text" :href="route('learning-path')" :current="request()->routeIs('learning-path') || request()->routeIs('module-detail') || request()->routeIs('exercises')" wire:navigate>Roadmap Belajar</flux:navlist.item>
-                        <flux:navlist.item icon="pencil" :href="route('diagnostic')" :current="request()->routeIs('diagnostic')" wire:navigate>Diagnostic Test</flux:navlist.item>
-                    @elseif(auth()->user()->hasRole('dosen'))
-                        <flux:navlist.item icon="chart-bar" :href="route('reports')" :current="request()->routeIs('reports')" wire:navigate>Laporan Mahasiswa</flux:navlist.item>
-                    @elseif(auth()->user()->hasRole('admin'))
-                        <flux:navlist.item icon="cog" href="/admin" target="_blank">Admin Panel</flux:navlist.item>
-                    @endif
-                </flux:navlist.group>
-            </flux:navlist>
+            <!-- AI Assistant Icon (Above Dashboard Menu) -->
+            <div class="flex flex-col items-center mb-4 w-full">
+                <div class="w-16 h-16 mb-1 flex items-center justify-center">
+                    <img src="{{ asset('images/robot.png') }}" alt="AI Assistant" class="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=apels&backgroundColor=transparent'">
+                </div>
+                <span class="text-[13px] font-semibold text-white tracking-wide">AI Assistant</span>
+                <div class="flex items-center space-x-1.5 mt-0.5">
+                    <div class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+                    <span class="text-[11px] text-gray-300">Online</span>
+                </div>
+            </div>
+
+            <!-- Navigation Menu -->
+            <nav class="flex flex-col gap-1.5 px-3 w-full">
+                @if(auth()->user()->hasRole('mahasiswa'))
+                    <a href="{{ route('dashboard') }}" wire:navigate class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 {{ request()->routeIs('dashboard') ? 'bg-[#1e3a8a] text-white shadow-lg' : 'text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white' }}">
+                        <x-heroicon-s-home class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Dashboard</span>
+                    </a>
+                    <a href="{{ route('learning-path') }}" wire:navigate class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 {{ request()->routeIs('learning-path') || request()->routeIs('module-detail') ? 'bg-[#1e3a8a] text-white shadow-lg' : 'text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white' }}">
+                        <x-heroicon-o-book-open class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Learning Path</span>
+                    </a>
+                    <a href="{{ route('diagnostic') }}" wire:navigate class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 {{ request()->routeIs('diagnostic') || request()->routeIs('exercises') ? 'bg-[#1e3a8a] text-white shadow-lg' : 'text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white' }}">
+                        <x-heroicon-o-pencil-square class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Exercises</span>
+                    </a>
+                    <a href="{{ route('test-history') }}" wire:navigate class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 {{ request()->routeIs('test-history') ? 'bg-[#1e3a8a] text-white shadow-lg' : 'text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white' }}">
+                        <x-heroicon-o-chart-bar class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Reports</span>
+                    </a>
+                @elseif(auth()->user()->hasRole('dosen'))
+                    <a href="{{ route('reports') }}" wire:navigate class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 {{ request()->routeIs('reports') ? 'bg-[#1e3a8a] text-white shadow-lg' : 'text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white' }}">
+                        <x-heroicon-o-chart-bar class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Laporan Mahasiswa</span>
+                    </a>
+                @elseif(auth()->user()->hasRole('admin'))
+                    <a href="/admin" target="_blank" class="flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white">
+                        <x-heroicon-o-cog-6-tooth class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Admin Panel</span>
+                    </a>
+                @endif
+            </nav>
 
             <flux:spacer />
 
-            {{-- Dark / Light Mode Toggle --}}
-            <div class="px-2 pb-1">
+            <!-- User Profile Card -->
+            <div class="px-3 mt-4 mb-3 w-full">
+                <a href="{{ route('settings.profile') }}" wire:navigate class="bg-[#0f2444] hover:bg-[#1e3a8a]/30 transition-colors border border-[#1e3a8a]/50 rounded-2xl p-3 flex items-center space-x-3 shadow-lg shadow-black/20 group cursor-pointer">
+                    <div class="w-10 h-10 rounded-full bg-[#1e3a8a] group-hover:bg-[#1e3a8a]/80 transition-colors flex items-center justify-center shrink-0 border border-blue-400/30">
+                        <x-heroicon-s-user class="w-5 h-5 text-white" />
+                    </div>
+                    <div class="flex flex-col overflow-hidden">
+                        <span class="text-[13px] font-semibold text-white truncate w-full group-hover:text-blue-100 transition-colors">{{ auth()->user()->name }}</span>
+                        <span class="text-[11px] text-blue-300/80 truncate w-full">Accounting Student</span>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Dark / Light Mode Toggle -->
+            <div class="px-3 w-full"
+                 x-data="{ isDark: document.documentElement.classList.contains('dark') }">
                 <button
-                    id="theme-toggle-btn"
-                    onclick="toggleTheme()"
-                    type="button"
-                    class="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-all duration-200"
-                    aria-label="Toggle dark/light mode"
-                >
-                    {{-- Sun icon (visible in dark mode → click to go light) --}}
-                    <svg id="icon-sun" class="hidden dark:block w-5 h-5 text-amber-400 group-hover:text-amber-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
-                    </svg>
-                    {{-- Moon icon (visible in light mode → click to go dark) --}}
-                    <svg id="icon-moon" class="block dark:hidden w-5 h-5 text-indigo-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                    </svg>
-                    <span id="theme-toggle-label" class="select-none">
-                        <span class="hidden dark:inline">Mode Terang</span>
-                        <span class="inline dark:hidden">Mode Gelap</span>
-                    </span>
+                    @click="toggleTheme(); isDark = document.documentElement.classList.contains('dark')"
+                    class="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-gray-300 hover:bg-[#1e3a8a]/50 hover:text-white transition-all duration-200 group">
+                    <div class="flex items-center space-x-3">
+                        <!-- Sun icon (light mode) -->
+                        <svg x-show="!isDark" class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07-.707.707M5.636 18.364l-.707.707M18.364 18.364l-.707-.707M5.636 5.636l-.707-.707M12 5a7 7 0 100 14A7 7 0 0012 5z"/>
+                        </svg>
+                        <!-- Moon icon (dark mode) -->
+                        <svg x-show="isDark" class="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                        </svg>
+                        <span class="font-medium text-[14px]" x-text="isDark ? 'Mode Gelap' : 'Mode Terang'"></span>
+                    </div>
+                    <!-- Toggle pill -->
+                    <div class="relative w-10 h-5 rounded-full transition-colors duration-300"
+                         :class="isDark ? 'bg-blue-600' : 'bg-yellow-400'">
+                        <div class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300"
+                             :class="isDark ? 'left-5' : 'left-0.5'"></div>
+                    </div>
                 </button>
             </div>
 
-            <!-- Desktop User Menu -->
-            <flux:dropdown position="bottom" align="start">
-                <flux:profile
-                    :name="auth()->user()->name"
-                    :initials="auth()->user()->initials()"
-                    icon-trailing="chevrons-up-down"
-                />
-
-                <flux:menu class="w-[220px]">
-                    <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
-                                    <span
-                                        class="flex h-full w-full items-center justify-center rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white"
-                                    >
-                                        {{ auth()->user()->initials() }}
-                                    </span>
-                                </span>
-
-                                <div class="grid flex-1 text-left text-sm leading-tight">
-                                    <span class="truncate font-semibold">{{ auth()->user()->name }}</span>
-                                    <span class="truncate text-xs">{{ auth()->user()->email }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <flux:menu.radio.group>
-                        <flux:menu.item href="/settings/profile" icon="cog" wire:navigate>Settings</flux:menu.item>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <form method="POST" action="{{ route('logout') }}" class="w-full">
-                        @csrf
-                        <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle" class="w-full">
-                            {{ __('Log Out') }}
-                        </flux:menu.item>
-                    </form>
-                </flux:menu>
-            </flux:dropdown>
+            <!-- Logout Button -->
+            <div class="px-3 pb-4 w-full border-t border-blue-900/40 pt-3">
+                <form method="POST" action="{{ route('logout') }}" class="w-full">
+                    @csrf
+                    <button type="submit" class="flex items-center space-x-3 px-3 py-2 w-full text-gray-300 hover:text-white transition-colors">
+                        <x-heroicon-o-arrow-right-on-rectangle class="w-5 h-5" />
+                        <span class="font-medium text-[14px]">Logout</span>
+                    </button>
+                </form>
+            </div>
         </flux:sidebar>
 
         <!-- Mobile User Menu -->
-        <flux:header class="lg:hidden">
-            <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
+        <flux:header class="lg:hidden bg-[#0a192f] border-b border-[#1e3a8a]/50">
+            <flux:sidebar.toggle class="lg:hidden text-white" icon="bars-2" inset="left" />
 
             <flux:spacer />
 
@@ -120,6 +137,7 @@
                 <flux:profile
                     :initials="auth()->user()->initials()"
                     icon-trailing="chevron-down"
+                    class="text-white"
                 />
 
                 <flux:menu>
@@ -127,9 +145,7 @@
                         <div class="p-0 text-sm font-normal">
                             <div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                                 <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
-                                    <span
-                                        class="flex h-full w-full items-center justify-center rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white"
-                                    >
+                                    <span class="flex h-full w-full items-center justify-center rounded-lg bg-[#1e3a8a] text-white">
                                         {{ auth()->user()->initials() }}
                                     </span>
                                 </span>
@@ -166,6 +182,15 @@
         @stack('scripts')
 
         <script>
+            function applyTheme() {
+                const theme = localStorage.getItem('apels-theme');
+                if (theme === 'light') {
+                    document.documentElement.classList.remove('dark');
+                } else {
+                    document.documentElement.classList.add('dark');
+                }
+            }
+
             function toggleTheme() {
                 const html = document.documentElement;
                 const isDark = html.classList.contains('dark');
@@ -181,6 +206,9 @@
                     setTimeout(initChart, 50);
                 }
             }
+
+            // Re-apply theme on every Livewire SPA navigation
+            document.addEventListener('livewire:navigated', applyTheme);
         </script>
     </body>
 </html>

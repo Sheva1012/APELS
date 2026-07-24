@@ -3,17 +3,16 @@
 namespace App\Filament\Resources\QuestionResource\Pages;
 
 use App\Filament\Resources\QuestionResource;
-use App\Services\Csv\CsvQuestionExporter;
 use App\Services\Csv\CsvQuestionImporter;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Storage;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
- * ListQuestions — includes Import header action (Req 20.1) and Export (Req 20.5).
+ * ListQuestions — includes Import header action (Req 20.1) and Export PDF (Req 20.5).
  */
 class ListQuestions extends ListRecords
 {
@@ -28,9 +27,12 @@ class ListQuestions extends ListRecords
             Actions\Action::make('import')
                 ->label('Import')
                 ->icon('heroicon-o-arrow-up-tray')
+                ->modalDescription(
+                    view('filament.partials.import-csv-hint')
+                )
                 ->form([
                     Forms\Components\FileUpload::make('file')
-                        ->label('File CSV atau XLSX')
+                        ->label('CSV or XLSX File')
                         ->acceptedFileTypes([
                             'text/csv',
                             'application/vnd.ms-excel',
@@ -87,19 +89,22 @@ class ListQuestions extends ListRecords
                     Storage::disk('local')->delete($filePath);
                 }),
 
-            // Export CSV (Req 20.5)
+            // Export PDF (Req 20.5)
             Actions\Action::make('export')
-                ->label('Export CSV')
-                ->icon('heroicon-o-arrow-down-tray')
+                ->label('Export PDF')
+                ->icon('heroicon-o-document-arrow-down')
                 ->action(function () {
-                    $questions = \App\Models\Question::all();
-                    $exporter = app(CsvQuestionExporter::class);
-                    $csv = $exporter->toCsvString($questions);
+                    $questions = \App\Models\Question::orderBy('set')->orderBy('type')->orderBy('tag')->get();
 
-                    return response()->streamDownload(function () use ($csv) {
-                        echo $csv;
-                    }, 'questions_export_' . now()->format('Ymd_His') . '.csv', [
-                        'Content-Type' => 'text/csv',
+                    $pdf = Pdf::loadView('pdf.questions-export', compact('questions'))
+                        ->setPaper('a3', 'landscape');
+
+                    $filename = 'questions_export_' . now()->format('Ymd_His') . '.pdf';
+
+                    return response()->streamDownload(function () use ($pdf) {
+                        echo $pdf->output();
+                    }, $filename, [
+                        'Content-Type' => 'application/pdf',
                     ]);
                 }),
         ];

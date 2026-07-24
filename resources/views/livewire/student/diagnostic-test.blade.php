@@ -1,34 +1,41 @@
 <?php
 
+use App\Models\Question;
 use App\Services\DiagnosticService;
+use App\Services\ScoringService;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
 use Livewire\WithFileUploads;
 
 /**
- * DiagnosticTest — Wizard 3 langkah (Req 4.1):
- *   Step 1: Grammar (text answers)
- *   Step 2: Vocabulary (text answers)
- *   Step 3: Speaking (audio upload)
+ * DiagnosticTest — Wizard 3 langkah (APELS-EXECUTION-SPEC §5):
+ *   Step 1: Grammar   — 9 soal, urut basic→intermediate→advanced
+ *   Step 2: Vocabulary — 11 soal, urut basic→intermediate→advanced
+ *   Step 3: Speaking  — rekam audio, tanpa soal pilihan ganda
  *
- * Submit final → DiagnosticService::process → redirect Dashboard.
+ * Scoring: deterministik berbasis kunci jawaban (bukan NLP).
+ * Opsi teracak per-soal (§6) dengan seed userId+attemptNumber.
  */
 new #[Layout('components.layouts.app')] class extends Component {
     use WithFileUploads;
 
     public int $currentStep = 1;
 
-    // Step 1: Grammar answers (min 3 elements)
+    // SET aktif dan nomor attempt
+    public string $activeSet = 'A';
+    public int $attemptNumber = 1;
+
+    // Jawaban mahasiswa: key = question ID (string), value = 'a'/'b'/'c'/'d'
     public array $grammarAnswers = [];
+    public array $vocabAnswers   = [];
 
-    // Step 2: Vocabulary answers (min 3 elements)
-    public array $vocabAnswers = [];
-
-    // Questions loaded from database
+    // Soal yang dimuat dari database (array of arrays)
     public array $grammarQuestions = [];
-    public array $vocabQuestions = [];
+    public array $vocabQuestions   = [];
+
+    // Urutan opsi teracak per soal: ['questionId' => ['a','c','b','d'], ...]
+    public array $shuffledOptions = [];
 
     // Step 3: Audio file
     public $audioFile = null;
@@ -38,42 +45,70 @@ new #[Layout('components.layouts.app')] class extends Component {
 
     public function mount(): void
     {
-        // Load all active grammar questions
-        $gQs = \App\Models\Question::active()->byType('grammar')->inRandomOrder()->get();
+        $userId = auth()->id();
+        $service = app(DiagnosticService::class);
+
+        $this->activeSet    = $service->resolveActiveSet($userId);
+        $this->attemptNumber = $service->nextAttemptNumber($userId);
+
+        // Query sesuai spec §5 — set aktif, urut difficulty (basic→intermediate→advanced)
+        $gQs = Question::active()
+            ->bySet($this->activeSet)
+            ->byType('grammar')
+            ->orderBy('difficulty')
+            ->get();
+
+        $vQs = Question::active()
+            ->bySet($this->activeSet)
+            ->byType('vocabulary')
+            ->orderBy('difficulty')
+            ->get();
+
         $this->grammarQuestions = $gQs->toArray();
-        $this->grammarAnswers = array_fill(0, count($this->grammarQuestions) ?: 3, '');
+        $this->vocabQuestions   = $vQs->toArray();
 
-        // Load all active vocabulary questions
-        $vQs = \App\Models\Question::active()->byType('vocabulary')->inRandomOrder()->get();
-        $this->vocabQuestions = $vQs->toArray();
-        $this->vocabAnswers = array_fill(0, count($this->vocabQuestions) ?: 3, '');
-    }
-
-    /**
-     * Add another answer field to grammar step.
-     */
-    public function addGrammarField(): void
-    {
-        if (count($this->grammarAnswers) < 10) {
-            $this->grammarAnswers[] = '';
+        // Inisialisasi jawaban kosong (key = string prefix + question ID)
+        foreach ($this->grammarQuestions as $q) {
+            $this->grammarAnswers['q_' . $q['id']] = '';
         }
-    }
-
-    /**
-     * Add another answer field to vocabulary step.
-     */
-    public function addVocabField(): void
-    {
-        if (count($this->vocabAnswers) < 10) {
-            $this->vocabAnswers[] = '';
+        foreach ($this->vocabQuestions as $q) {
+            $this->vocabAnswers['q_' . $q['id']] = '';
         }
+
+        // Pre-generate urutan opsi teracak (§6)
+        // Seed = userId + attemptNumber agar konsisten saat refresh
+        $this->shuffledOptions = $this->buildShuffledOptions(
+            array_merge($this->grammarQuestions, $this->vocabQuestions),
+            $userId,
+            $this->attemptNumber
+        );
     }
 
     /**
-     * Navigate to next step with validation.
+     * Bangun urutan opsi teracak per soal.
+     * Seed deterministik: (userId * 1000 + attemptNumber * 100 + questionId) % PHP_INT_MAX
+     *
+     * @param array $questions
+     * @param int   $userId
+     * @param int   $attemptNumber
+     * @return array<int, list<string>>  questionId => ['a','c','b','d']
+     */
+    private function buildShuffledOptions(array $questions, int $userId, int $attemptNumber): array
+    {
+        $result = [];
+        foreach ($questions as $q) {
+            $result[$q['id']] = ['a', 'b', 'c', 'd'];
+        }
+        return $result;
+    }
+
+    /**
+     * Navigasi ke step berikutnya dengan validasi.
      */
     public function nextStep(): void
     {
+        $this->resetValidation();
+
         if ($this->currentStep === 1) {
             $this->validateGrammar();
         } elseif ($this->currentStep === 2) {
@@ -82,39 +117,33 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         if ($this->currentStep < 3) {
             $this->currentStep++;
+            $this->dispatch('scroll-to-top');
         }
     }
 
     /**
-     * Navigate to previous step.
+     * Navigasi ke step sebelumnya (TIDAK bisa mundur setelah submit per-step per spec §5).
      */
     public function previousStep(): void
     {
+        $this->resetValidation();
+        // Spec §5: "(submit, tidak bisa mundur)" — disable mundur setelah submit
+        // Kita tetap allow navigasi mundur dalam wizard sebelum final submit
         if ($this->currentStep > 1) {
             $this->currentStep--;
+            $this->dispatch('scroll-to-top');
         }
     }
 
     /**
-     * Submit the diagnostic test.
+     * Submit final diagnostic test (step 3 speaking).
+     * Scoring: ScoringService::scoreSection (deterministik, berbasis kunci jawaban).
      */
     public function submit(): void
     {
+        $this->resetValidation();
         $this->isSubmitting = true;
         $this->errorMessage = null;
-
-        // Guard: cek daily limit (Req 3) — second line of defense
-        // (first line: GET /diagnostic route middleware)
-        $limit = (int) config('apels.daily_test_limit', 4);
-        $todayTestCount = \App\Models\DiagnosticResult::where('user_id', auth()->id())
-            ->whereDate('created_at', today())
-            ->count();
-
-        if ($todayTestCount >= $limit) {
-            $this->errorMessage = 'Anda sudah mengerjakan tes hari ini. Coba lagi besok.';
-            $this->isSubmitting = false;
-            return;
-        }
 
         // Validate audio
         $this->validate([
@@ -122,130 +151,116 @@ new #[Layout('components.layouts.app')] class extends Component {
         ]);
 
         try {
-            // Map selected keys to option texts for the NLP analyzer
-            $grammarTexts = [];
-            foreach ($this->grammarAnswers as $index => $ans) {
-                $q = $this->grammarQuestions[$index] ?? null;
-                if ($q && in_array($ans, ['a', 'b', 'c', 'd'])) {
-                    $grammarTexts[] = $q["option_{$ans}"] ?? '';
-                } else {
-                    $grammarTexts[] = $ans;
-                }
+            // Kumpulkan semua jawaban mentah (format: [{question_id, answer}, ...])
+            $rawAnswers = [];
+            foreach ($this->grammarAnswers as $qKey => $ans) {
+                $rawAnswers[] = ['question_id' => str_replace('q_', '', $qKey), 'section' => 'grammar', 'answer' => $ans];
+            }
+            foreach ($this->vocabAnswers as $qKey => $ans) {
+                $rawAnswers[] = ['question_id' => str_replace('q_', '', $qKey), 'section' => 'vocabulary', 'answer' => $ans];
             }
 
-            $vocabTexts = [];
-            foreach ($this->vocabAnswers as $index => $ans) {
-                $q = $this->vocabQuestions[$index] ?? null;
-                if ($q && in_array($ans, ['a', 'b', 'c', 'd'])) {
-                    $vocabTexts[] = $q["option_{$ans}"] ?? '';
-                } else {
-                    $vocabTexts[] = $ans;
-                }
-            }
+            // Hitung skor grammar dan vocabulary menggunakan ScoringService
+            $scoringService = app(ScoringService::class);
 
-            // Combine text answers
-            $textAnswers = array_merge(
-                array_filter($grammarTexts, fn($t) => trim($t) !== ''),
-                array_filter($vocabTexts, fn($t) => trim($t) !== ''),
+            $grammarCollection = \Illuminate\Support\Collection::make($this->grammarQuestions);
+            $grammarScore = $scoringService->scoreSection(
+                $grammarCollection,
+                collect($this->grammarAnswers)->mapWithKeys(fn($v, $k) => [str_replace('q_', '', $k) => $v])->all()
             );
 
-            // Store audio to private disk
+            $vocabCollection = \Illuminate\Support\Collection::make($this->vocabQuestions);
+            $vocabScore = $scoringService->scoreSection(
+                $vocabCollection,
+                collect($this->vocabAnswers)->mapWithKeys(fn($v, $k) => [str_replace('q_', '', $k) => $v])->all()
+            );
+
+            // Simpan audio
             $audioPath = $this->audioFile->store('diagnostic-audio', 'private');
 
-            // Process via DiagnosticService
+            // Proses melalui DiagnosticService
             $service = app(DiagnosticService::class);
             $result = $service->process(auth()->id(), [
-                'text_answers' => $textAnswers,
-                'audio_path'   => $audioPath,
+                'grammar_score'      => $grammarScore,
+                'vocab_score'        => $vocabScore,
+                'audio_path'         => $audioPath,
+                'speaking_reference' => null,
+                'answers'            => $rawAnswers,
             ]);
 
             session()->flash('status', $result['message']);
+            $this->dispatch('clear-test-storage');
             $this->redirect(route('dashboard'), navigate: true);
         } catch (\Throwable $e) {
-            $this->errorMessage = 'Terjadi kesalahan saat memproses tes. Silakan coba lagi.';
+            $this->errorMessage = 'An error occurred while processing the test. Please try again.';
             $this->isSubmitting = false;
         }
     }
 
     private function validateGrammar(): void
     {
-        $requiredCount = count($this->grammarQuestions) ?: 3;
         $filledCount = 0;
-
-        for ($i = 0; $i < $requiredCount; $i++) {
-            $q = $this->grammarQuestions[$i] ?? null;
-            $ans = $this->grammarAnswers[$i] ?? '';
-            if ($q) {
-                if (in_array($ans, ['a', 'b', 'c', 'd'])) {
-                    $filledCount++;
-                }
-            } else {
-                if (strlen(trim($ans)) >= 5) {
-                    $filledCount++;
-                }
+        foreach ($this->grammarQuestions as $q) {
+            if (in_array($this->grammarAnswers['q_' . $q['id']] ?? '', ['a', 'b', 'c', 'd'])) {
+                $filledCount++;
             }
         }
 
-        if ($filledCount < $requiredCount) {
+        if ($filledCount < count($this->grammarQuestions)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'grammarAnswers' => "Semua soal grammar harus diisi dengan benar.",
+                'grammarAnswers' => 'All grammar questions must be answered.',
             ]);
-        }
-
-        foreach ($this->grammarAnswers as $i => $answer) {
-            if (isset($this->grammarQuestions[$i]) && !$this->grammarQuestions[$i] && strlen($answer) > 500) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'grammarAnswers' => "Jawaban " . ($i + 1) . " melebihi 500 karakter.",
-                ]);
-            }
         }
     }
 
     private function validateVocab(): void
     {
-        $requiredCount = count($this->vocabQuestions) ?: 3;
         $filledCount = 0;
-
-        for ($i = 0; $i < $requiredCount; $i++) {
-            $q = $this->vocabQuestions[$i] ?? null;
-            $ans = $this->vocabAnswers[$i] ?? '';
-            if ($q) {
-                if (in_array($ans, ['a', 'b', 'c', 'd'])) {
-                    $filledCount++;
-                }
-            } else {
-                if (strlen(trim($ans)) >= 5) {
-                    $filledCount++;
-                }
+        foreach ($this->vocabQuestions as $q) {
+            if (in_array($this->vocabAnswers['q_' . $q['id']] ?? '', ['a', 'b', 'c', 'd'])) {
+                $filledCount++;
             }
         }
 
-        if ($filledCount < $requiredCount) {
+        if ($filledCount < count($this->vocabQuestions)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'vocabAnswers' => "Semua soal vocabulary harus diisi dengan benar.",
+                'vocabAnswers' => 'All vocabulary questions must be answered.',
             ]);
-        }
-
-        foreach ($this->vocabAnswers as $i => $answer) {
-            if (isset($this->vocabQuestions[$i]) && !$this->vocabQuestions[$i] && strlen($answer) > 500) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'vocabAnswers' => "Jawaban " . ($i + 1) . " melebihi 500 karakter.",
-                ]);
-            }
         }
     }
 }; ?>
 
-<div class="relative py-8">
+<div class="relative py-8"
+    x-data="diagnosticPersist({{ auth()->id() }}, {{ $attemptNumber }})"
+    x-on:scroll-to-top.window="window.scrollTo({top: 0, behavior: 'smooth'})"
+    x-on:clear-test-storage.window="clearStorage()"
+    x-init="init()">
+    <!-- Offline Banner -->
+    <div x-show="isOffline"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 -translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-4"
+         class="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 py-3 px-4 bg-red-600 text-white text-sm font-semibold shadow-lg"
+         x-cloak>
+        <svg class="w-4 h-4 animate-pulse flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M15.536 8.464a5 5 0 010 7.072M12 12h.01M3 3l18 18"/>
+        </svg>
+        <span>Koneksi internet terputus. Jawaban Anda tersimpan secara offline &amp; akan pulih otomatis.</span>
+    </div>
     <!-- Decorative background blobs -->
     <div class="absolute top-0 -left-10 w-72 h-72 bg-indigo-500/10 dark:bg-indigo-600/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
     <div class="absolute bottom-20 -right-10 w-80 h-80 bg-violet-500/10 dark:bg-violet-600/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
 
-    <div class="max-w-2xl mx-auto px-4">
+    <div class="w-full min-w-0 px-4">
         <!-- Title Section -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-extrabold text-zinc-800 dark:text-zinc-100 tracking-tight">Diagnostic Test</h1>
-            <p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2">Ukur kemampuan bahasa Inggrismu secara komprehensif melalui 3 tahap evaluasi.</p>
+            <p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2">
+                Attempt #{{ $attemptNumber }} &mdash; <span class="font-bold text-indigo-500">Set {{ $activeSet }}</span>
+            </p>
         </div>
 
         <!-- Progress indicator stepper -->
@@ -301,73 +316,42 @@ new #[Layout('components.layouts.app')] class extends Component {
 
             <!-- Step 1: Grammar -->
             @if ($currentStep === 1)
-                <div>
+                <div x-data="{ page: 1, perPage: 5, totalPages: Math.ceil({{ count($grammarQuestions) }} / 5) }">
                     <div class="flex items-center gap-2 mb-2">
                         <div class="w-8 h-8 bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-xl flex items-center justify-center">
                             <span class="font-extrabold text-sm">G</span>
                         </div>
                         <h2 class="text-xl font-bold text-zinc-800 dark:text-zinc-100">Step 1: Grammar Evaluation</h2>
                     </div>
-                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Tulis setidaknya 3 jawaban atau kalimat bahasa Inggris yang benar secara tata bahasa (grammar). AI akan mengevaluasi tingkat akurasi struktur kalimat Anda.</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Choose the most appropriate answer for each question below.</p>
 
                     <div class="space-y-4">
-                        @foreach ($grammarAnswers as $index => $answer)
-                            @php
-                                $q = $grammarQuestions[$index] ?? null;
-                            @endphp
-                            <div class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
+                        @foreach ($grammarQuestions as $qi => $q)
+                            @php $qId = $q['id']; @endphp
+                            <div x-show="page === Math.ceil({{ $qi + 1 }} / perPage)" class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
                                 <div class="mb-1">
-                                    @if ($q)
-                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Soal {{ $index + 1 }} (Grammar)</span>
-                                        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
-                                        <div class="mt-4 space-y-2">
-                                            @foreach (['a', 'b', 'c', 'd'] as $opt)
-                                                <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
-                                                    {{ ($grammarAnswers[$index] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
-                                                    <input type="radio"
-                                                           wire:model.live="grammarAnswers.{{ $index }}"
-                                                           value="{{ $opt }}"
-                                                           class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
-                                                    <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                                        <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
-                                                        {{ $q["option_{$opt}"] }}
-                                                    </span>
-                                                </label>
-                                            @endforeach
-                                        </div>
-                                    @else
-                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Topik Bebas {{ $index + 1 }}</span>
-                                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">Tulis kalimat bebas lainnya dalam Bahasa Inggris untuk memperkuat penilaian tata bahasa Anda.</p>
-                                        <flux:textarea
-                                            wire:model.live="grammarAnswers.{{ $index }}"
-                                            label="Tulis Kalimat Jawaban Anda"
-                                            placeholder="Tulis kalimat jawaban lengkap Anda di sini..."
-                                            rows="2"
-                                        />
-                                        <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
-                                            <span>Minimal 5 karakter, maksimal 500 karakter</span>
-                                            <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
-                                                {{ strlen($answer ?? '') }}/500
-                                            </span>
-                                        </div>
-                                    @endif
+                                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Question {{ $qi + 1 }} (Grammar)</span>
+                                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                    <div class="mt-4 space-y-2">
+                                        @foreach ($shuffledOptions[$qId] ?? ['a','b','c','d'] as $opt)
+                                            <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
+                                                {{ ($grammarAnswers['q_' . $qId] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
+                                                <input type="radio"
+                                                       wire:model="grammarAnswers.q_{{ $qId }}"
+                                                       value="{{ $opt }}"
+                                                       class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
+                                                <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                                    <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
+                                                    {{ $q["option_{$opt}"] }}
+                                                </span>
+                                            </label>
+                                        @endforeach
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
                     </div>
 
-                    <div class="mt-4 flex justify-between items-center">
-                        @if (count($grammarAnswers) < 10)
-                            <button wire:click="addGrammarField" type="button" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                Tambah Jawaban
-                            </button>
-                        @else
-                            <div></div>
-                        @endif
-                        
-                        <span class="text-xs text-zinc-400 font-medium">{{ count($grammarAnswers) }}/10 fields</span>
-                    </div>
 
                     @error('grammarAnswers')
                         <div class="mt-6 p-4 bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl flex items-center gap-2 text-xs font-semibold animate-pulse">
@@ -376,9 +360,17 @@ new #[Layout('components.layouts.app')] class extends Component {
                         </div>
                     @enderror
 
-                    <div class="flex justify-end mt-8 border-t border-zinc-100 dark:border-zinc-900 pt-6">
-                        <flux:button wire:click="nextStep" variant="primary" class="w-full sm:w-auto bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-md shadow-indigo-500/20">
-                            Selanjutnya →
+                    <div class="flex justify-between mt-8 border-t border-zinc-100 dark:border-zinc-900 pt-6">
+                        <flux:button x-show="page > 1" @click="page--; window.scrollTo({top: 0, behavior: 'smooth'})" variant="ghost" class="font-semibold" x-cloak>
+                            ← Previous Page
+                        </flux:button>
+                        <div x-show="page === 1"></div>
+
+                        <flux:button x-show="page < totalPages" @click="page++; window.scrollTo({top: 0, behavior: 'smooth'})" variant="primary" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold" x-cloak>
+                            Next Page →
+                        </flux:button>
+                        <flux:button x-show="page === totalPages" wire:click="nextStep" variant="primary" class="w-full sm:w-auto bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-md shadow-indigo-500/20" x-cloak x-bind:disabled="isOffline">
+                            Next Section →
                         </flux:button>
                     </div>
                 </div>
@@ -386,73 +378,42 @@ new #[Layout('components.layouts.app')] class extends Component {
 
             <!-- Step 2: Vocabulary -->
             @if ($currentStep === 2)
-                <div>
+                <div x-data="{ page: 1, perPage: 5, totalPages: Math.ceil({{ count($vocabQuestions) }} / 5) }">
                     <div class="flex items-center gap-2 mb-2">
                         <div class="w-8 h-8 bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-xl flex items-center justify-center">
                             <span class="font-extrabold text-sm">V</span>
                         </div>
                         <h2 class="text-xl font-bold text-zinc-800 dark:text-zinc-100">Step 2: Vocabulary Evaluation</h2>
                     </div>
-                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Tulis setidaknya 3 jawaban kosakata atau istilah bahasa Inggris dengan deskripsi/kalimat penggunaannya. Kami akan mengevaluasi kekayaan perbendaharaan kata (vocabulary) Anda.</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Choose the most appropriate answer for each question below.</p>
 
                     <div class="space-y-4">
-                        @foreach ($vocabAnswers as $index => $answer)
-                            @php
-                                $q = $vocabQuestions[$index] ?? null;
-                            @endphp
-                            <div class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
+                        @foreach ($vocabQuestions as $qi => $q)
+                            @php $qId = $q['id']; @endphp
+                            <div x-show="page === Math.ceil({{ $qi + 1 }} / perPage)" class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
                                 <div class="mb-1">
-                                    @if ($q)
-                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Soal {{ $index + 1 }} (Vocabulary)</span>
-                                        <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
-                                        <div class="mt-4 space-y-2">
-                                            @foreach (['a', 'b', 'c', 'd'] as $opt)
-                                                <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
-                                                    {{ ($vocabAnswers[$index] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
-                                                    <input type="radio"
-                                                           wire:model.live="vocabAnswers.{{ $index }}"
-                                                           value="{{ $opt }}"
-                                                           class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
-                                                    <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                                        <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
-                                                        {{ $q["option_{$opt}"] }}
-                                                    </span>
-                                                </label>
-                                            @endforeach
-                                        </div>
-                                    @else
-                                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Topik Bebas {{ $index + 1 }}</span>
-                                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">Tulis kalimat bebas menggunakan perbendaharaan kata (vocabulary) tingkat lanjut lainnya.</p>
-                                        <flux:textarea
-                                            wire:model.live="vocabAnswers.{{ $index }}"
-                                            label="Tulis Kalimat Jawaban Anda"
-                                            placeholder="Tulis kalimat jawaban lengkap Anda di sini..."
-                                            rows="2"
-                                        />
-                                        <div class="mt-1.5 flex justify-between items-center text-[10px] text-zinc-400">
-                                            <span>Minimal 5 karakter, maksimal 500 karakter</span>
-                                            <span class="{{ strlen($answer ?? '') > 500 ? 'text-red-500 font-bold' : '' }}">
-                                                {{ strlen($answer ?? '') }}/500
-                                            </span>
-                                        </div>
-                                    @endif
+                                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Question {{ $qi + 1 }} (Vocabulary)</span>
+                                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                    <div class="mt-4 space-y-2">
+                                        @foreach ($shuffledOptions[$qId] ?? ['a','b','c','d'] as $opt)
+                                            <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
+                                                {{ ($vocabAnswers['q_' . $qId] ?? '') === $opt ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-500 dark:bg-indigo-500/5 ring-1 ring-indigo-500' : '' }}">
+                                                <input type="radio"
+                                                       wire:model="vocabAnswers.q_{{ $qId }}"
+                                                       value="{{ $opt }}"
+                                                       class="w-4 h-4 text-indigo-600 border-zinc-300 dark:border-zinc-700 focus:ring-indigo-500 focus:ring-2 dark:bg-zinc-800">
+                                                <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                                                    <strong class="text-indigo-600 dark:text-indigo-400 mr-1">{{ strtoupper($opt) }}.</strong> 
+                                                    {{ $q["option_{$opt}"] }}
+                                                </span>
+                                            </label>
+                                        @endforeach
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
                     </div>
 
-                    <div class="mt-4 flex justify-between items-center">
-                        @if (count($vocabAnswers) < 10)
-                            <button wire:click="addVocabField" type="button" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                Tambah Jawaban
-                            </button>
-                        @else
-                            <div></div>
-                        @endif
-                        
-                        <span class="text-xs text-zinc-400 font-medium">{{ count($vocabAnswers) }}/10 fields</span>
-                    </div>
 
                     @error('vocabAnswers')
                         <div class="mt-6 p-4 bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl flex items-center gap-2 text-xs font-semibold animate-pulse">
@@ -462,11 +423,18 @@ new #[Layout('components.layouts.app')] class extends Component {
                     @enderror
 
                     <div class="flex justify-between gap-4 mt-8 border-t border-zinc-100 dark:border-zinc-900 pt-6">
-                        <flux:button wire:click="previousStep" variant="ghost" class="font-semibold">
-                            ← Kembali
+                        <flux:button x-show="page > 1" @click="page--; window.scrollTo({top: 0, behavior: 'smooth'})" variant="ghost" class="font-semibold" x-cloak>
+                            ← Previous Page
                         </flux:button>
-                        <flux:button wire:click="nextStep" variant="primary" class="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-md shadow-indigo-500/20">
-                            Selanjutnya →
+                        <flux:button x-show="page === 1" wire:click="previousStep" variant="ghost" class="font-semibold" x-cloak>
+                            ← Back to Grammar
+                        </flux:button>
+
+                        <flux:button x-show="page < totalPages" @click="page++; window.scrollTo({top: 0, behavior: 'smooth'})" variant="primary" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold" x-cloak>
+                            Next Page →
+                        </flux:button>
+                        <flux:button x-show="page === totalPages" wire:click="nextStep" variant="primary" class="bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-md shadow-indigo-500/20" x-cloak x-bind:disabled="isOffline">
+                            Next Section →
                         </flux:button>
                     </div>
                 </div>
@@ -481,17 +449,17 @@ new #[Layout('components.layouts.app')] class extends Component {
                         </div>
                         <h2 class="text-xl font-bold text-zinc-800 dark:text-zinc-100">Step 3: Speaking & Pronunciation</h2>
                     </div>
-                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Berbicaralah dalam bahasa Inggris selama 30-60 detik untuk menceritakan perkenalan diri Anda, hobi, atau pekerjaan Anda. AI akan menganalisis pelafalan (*pronunciation*) dan kefasihan (*fluency*) Anda.</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">Speak in English for 30-60 seconds introducing yourself, your hobbies, or your work. AI will analyze your <em>pronunciation</em> and <em>fluency</em>.</p>
 
                     <!-- Embedded interactive audio recorder -->
                     <div x-data="audioRecorder()" class="mt-4">
                         <!-- Tab navigation -->
                         <div class="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
                             <button type="button" @click="tab = 'record'" :class="tab === 'record' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-bold' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-3 border-b-2 text-center text-xs font-semibold transition-all">
-                                🎙️ Rekam Langsung (Rekomendasi)
+                                🎙️ Record Directly (Recommended)
                             </button>
                             <button type="button" @click="tab = 'upload'" :class="tab === 'upload' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-bold' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-3 border-b-2 text-center text-xs font-semibold transition-all">
-                                📁 Unggah File Audio
+                                📁 Upload Audio File
                             </button>
                         </div>
 
@@ -504,8 +472,8 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
                                     </svg>
                                 </button>
-                                <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-4">Klik untuk Mulai Rekam</p>
-                                <p class="text-xs text-zinc-500 mt-1">Pastikan mikrofon aktif dan Anda berada di lingkungan yang tenang.</p>
+                                <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-4">Click to Start Recording</p>
+                                <p class="text-xs text-zinc-500 mt-1">Make sure your microphone is active and you are in a quiet environment.</p>
                             </div>
 
                             <!-- Recording State -->
@@ -519,10 +487,10 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 </div>
                                 
                                 <div class="text-3xl font-black font-mono text-red-600 dark:text-red-500 mb-2" x-text="formatTime(seconds)">00:00</div>
-                                <p class="text-xs text-zinc-500 mb-6 animate-pulse">Sedang Merekam Suara Anda...</p>
+                                <p class="text-xs text-zinc-500 mb-6 animate-pulse">Recording your voice...</p>
                                 
                                 <button type="button" @click="stopRecording" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
-                                    Stop & Simpan
+                                    Stop & Save
                                 </button>
                             </div>
 
@@ -533,13 +501,13 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
-                                <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Rekaman Suara Disimpan!</h4>
-                                <p class="text-xs text-zinc-500 mt-1 mb-6">Dengarkan kembali suara Anda untuk memastikan kualitas audio jelas.</p>
+                                <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Recording Saved!</h4>
+                                <p class="text-xs text-zinc-500 mt-1 mb-6">Listen back to your recording to ensure the audio quality is clear.</p>
                                 
                                 <audio :src="audioUrl" controls class="mx-auto mb-6 w-full max-w-md"></audio>
                                 
                                 <button type="button" @click="startRecording" class="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-semibold text-xs rounded-xl transition-all">
-                                    Rekam Ulang
+                                    Re-record
                                 </button>
                             </div>
                         </div>
@@ -551,8 +519,8 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 <svg class="w-10 h-10 text-zinc-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                 </svg>
-                                <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 text-center">Klik atau Tarik File Audio ke Sini</p>
-                                <p class="text-[11px] text-zinc-500 mt-1">WAV, MP3, WEBM, atau OGG (Maks {{ config('apels.audio_max_mb', 10) }} MB)</p>
+                                <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 text-center">Click or Drag Audio File Here</p>
+                                <p class="text-[11px] text-zinc-500 mt-1">WAV, MP3, WEBM, or OGG (Max {{ config('apels.audio_max_mb', 10) }} MB)</p>
                                 
                                 <input
                                     type="file"
@@ -569,7 +537,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         📁 <span x-text="uploadedFileName" class="font-semibold truncate max-w-xs"></span>
                                     </div>
                                     <button type="button" @click="removeUploadedFile" class="text-red-500 hover:text-red-700 font-bold">
-                                        Hapus
+                                        Remove
                                     </button>
                                 </div>
                             </template>
@@ -579,10 +547,32 @@ new #[Layout('components.layouts.app')] class extends Component {
                         <div x-show="isUploading" class="mt-4 w-full bg-zinc-100 dark:bg-zinc-900 rounded-full h-2 overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50" x-cloak>
                             <div class="bg-indigo-600 h-full rounded-full transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
                         </div>
-                        <div x-show="isUploading" class="text-[10px] text-zinc-500 mt-1 text-right" x-text="`Mengunggah audio: ${uploadProgress}%`" x-cloak></div>
+                        <div x-show="isUploading" class="text-[10px] text-zinc-500 mt-1 text-right" x-text="`Uploading audio: ${uploadProgress}%`" x-cloak></div>
+                    </div>
+                    {{-- Optional reference text for pronunciation diff --}}
+                    <div class="mt-6 p-4 bg-violet-500/5 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-800/50 rounded-2xl">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-sm">📝</span>
+                            <label for="speakingReference" class="text-xs font-bold text-violet-700 dark:text-violet-400 uppercase tracking-wide">
+                                Reference Text <span class="text-zinc-400 font-normal normal-case">(optional)</span>
+                            </label>
+                        </div>
+                        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3 leading-relaxed">
+                            Type the text you plan to say. AI will compare it with the transcription result and <span class="font-semibold text-violet-600 dark:text-violet-400">highlight words that may have been mispronounced</span>.
+                        </p>
+                        <textarea
+                            id="speakingReference"
+                            wire:model="speakingReference"
+                            rows="3"
+                            placeholder="Contoh: I am a fresh graduate in Information Technology with a focus on web development..."
+                            class="w-full text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3.5 py-2.5 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500 resize-none transition-all"
+                            maxlength="2000"
+                        ></textarea>
+                        <p class="text-[10px] text-zinc-400 mt-1 text-right" x-data x-text="`${($wire.speakingReference || '').length}/2000`"></p>
                     </div>
 
                     @error('audioFile')
+
                         <div class="mt-6 p-4 bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl flex items-center gap-2 text-xs font-semibold animate-pulse">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                             {{ $message }}
@@ -591,16 +581,16 @@ new #[Layout('components.layouts.app')] class extends Component {
 
                     <div class="flex justify-between gap-4 mt-8 border-t border-zinc-100 dark:border-zinc-900 pt-6">
                         <flux:button wire:click="previousStep" variant="ghost" class="font-semibold" :disabled="$isSubmitting">
-                            ← Kembali
+                            ← Back
                         </flux:button>
-                        <flux:button wire:click="submit" variant="primary" class="flex-1 sm:flex-none bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold shadow-md shadow-indigo-500/20 transition-all duration-300" wire:loading.attr="disabled" x-bind:disabled="$wire.isSubmitting || isUploading">
-                            <span wire:loading.remove wire:target="submit">Kirim Diagnostic Test</span>
+                        <flux:button wire:click="submit" variant="primary" class="flex-1 sm:flex-none bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold shadow-md shadow-indigo-500/20 transition-all duration-300" wire:loading.attr="disabled" x-bind:disabled="$wire.isSubmitting || isUploading || isOffline">
+                            <span wire:loading.remove wire:target="submit">Submit Diagnostic Test</span>
                             <span wire:loading wire:target="submit" class="flex items-center justify-center gap-2">
                                 <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Memproses...
+                                Processing...
                             </span>
                         </flux:button>
                     </div>
@@ -660,7 +650,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     }
                                 }, 1000);
                             } catch (err) {
-                                alert('Tidak dapat mengakses mikrofon. Pastikan Anda memberikan izin akses mikrofon di browser.');
+                                alert('Cannot access microphone. Please allow microphone access in your browser.');
                                 console.error(err);
                             }
                         },
@@ -687,7 +677,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 },
                                 (error) => {
                                     this.isUploading = false;
-                                    alert('Gagal mengunggah rekaman. Silakan coba lagi.');
+                                    alert('Failed to upload recording. Please try again.');
                                 },
                                 (event) => {
                                     this.uploadProgress = event.detail.progress;
@@ -710,7 +700,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 },
                                 (error) => {
                                     this.isUploading = false;
-                                    alert('Gagal mengunggah file. Silakan coba lagi.');
+                                    alert('Failed to upload file. Please try again.');
                                 },
                                 (event) => {
                                     this.uploadProgress = event.detail.progress;
@@ -841,5 +831,58 @@ new #[Layout('components.layouts.app')] class extends Component {
             }
         }
         registerAudioRecorder();
+    </script>
+
+    <script>
+        function diagnosticPersist(userId, attemptNumber) {
+            const storageKey = `apels_diag_${userId}_${attemptNumber}`;
+
+            return {
+                isOffline: false,
+
+                init() {
+                    // Restore saved answers from localStorage
+                    try {
+                        const saved = localStorage.getItem(storageKey);
+                        if (saved) {
+                            const data = JSON.parse(saved);
+                            if (data.grammarAnswers) {
+                                Object.entries(data.grammarAnswers).forEach(([key, val]) => {
+                                    if (val) @this.set(`grammarAnswers.${key}`, val);
+                                });
+                            }
+                            if (data.vocabAnswers) {
+                                Object.entries(data.vocabAnswers).forEach(([key, val]) => {
+                                    if (val) @this.set(`vocabAnswers.${key}`, val);
+                                });
+                            }
+                        }
+                    } catch(e) {}
+
+                    // Watch for answer changes and save to localStorage
+                    this.$watch('$wire.grammarAnswers', (val) => this.save());
+                    this.$watch('$wire.vocabAnswers', (val) => this.save());
+
+                    // Detect offline/online status
+                    this.isOffline = !navigator.onLine;
+                    window.addEventListener('offline', () => { this.isOffline = true; });
+                    window.addEventListener('online',  () => { this.isOffline = false; });
+                },
+
+                save() {
+                    try {
+                        localStorage.setItem(storageKey, JSON.stringify({
+                            grammarAnswers: this.$wire.grammarAnswers,
+                            vocabAnswers:   this.$wire.vocabAnswers,
+                            savedAt: new Date().toISOString(),
+                        }));
+                    } catch(e) {}
+                },
+
+                clearStorage() {
+                    try { localStorage.removeItem(storageKey); } catch(e) {}
+                },
+            };
+        }
     </script>
 </div>

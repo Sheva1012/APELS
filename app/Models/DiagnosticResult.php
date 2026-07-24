@@ -26,13 +26,18 @@ class DiagnosticResult extends Model
      */
     protected $fillable = [
         'user_id',
+        'set_used',
+        'attempt_number',
         'speaking',
         'grammar',
         'vocabulary',
         'overall',
         'attempt',
         'audio_path',
+        'speaking_transcript',
+        'speaking_reference',
         'is_speaking_processed',
+        'answers',
     ];
 
     /**
@@ -43,12 +48,17 @@ class DiagnosticResult extends Model
     protected function casts(): array
     {
         return [
-            'speaking' => 'integer',
-            'grammar' => 'integer',
-            'vocabulary' => 'integer',
-            'overall' => 'float',
-            'attempt' => 'integer',
-            'is_speaking_processed' => 'boolean',
+            'set_used'             => 'string',
+            'attempt_number'       => 'integer',
+            'speaking'             => 'integer',
+            'grammar'              => 'integer',
+            'vocabulary'           => 'integer',
+            'overall'              => 'float',
+            'attempt'              => 'integer',
+            'speaking_transcript'  => 'string',
+            'speaking_reference'   => 'string',
+            'is_speaking_processed'=> 'boolean',
+            'answers'              => 'array',
         ];
     }
 

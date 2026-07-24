@@ -43,8 +43,8 @@ return new class extends Migration
             $table->string('title', 255);
             $table->text('description')->nullable();
             $table->string('path_key', 50);
-            $table->enum('level', ['basic', 'intermediate', 'advanced', 'professional']);
-            $table->enum('tag', ['basic', 'advanced']);
+            $table->enum('level', ['basic', 'intermediate', 'advanced']);
+            $table->enum('tag', ['basic', 'intermediate', 'advanced']);
             $table->unsignedInteger('order_index')->default(0);
             $table->json('content')->nullable();
             $table->boolean('is_active')->default(true);

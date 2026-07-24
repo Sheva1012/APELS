@@ -3,98 +3,66 @@
 namespace Database\Seeders;
 
 use App\Models\Module;
+use App\Models\Lesson;
 use Illuminate\Database\Seeder;
 
-/**
- * ModuleSeeder — modul MVP wajib (Req 11) + 1 basic placeholder.
- *
- * Idempotent: gunakan firstOrCreate berdasarkan kombinasi (title, path_key)
- * agar aman dijalankan berkali-kali tanpa duplikasi.
- *
- * Modul yang dibuat:
- *  - financial_presentation (professional, professional_simulation) — Req 11.1
- *  - client_meeting        (professional, professional_simulation) — Req 11.2
- *  - advanced_negotiation  (professional, industry_ready)          — Req 11.3
- *  - basic_english         (basic,        emergency_foundation)    — placeholder
- *                                                                    untuk uji unlock
- *                                                                    level=basic (Req 10.2)
- */
 class ModuleSeeder extends Seeder
 {
     public function run(): void
     {
-        $modules = [
+        // 1. Modul Beginner (Grammar Foundation)
+        $modulDasar = Module::firstOrCreate(
+            ['title' => 'Pengenalan Tenses Dasar', 'path_key' => 'grammar_foundation'],
             [
-                'title'       => 'Financial Presentation',
-                'description' => 'Simulasi presentasi keuangan untuk audiens internasional. Mencakup struktur opening, penyampaian data, dan handling Q&A.',
-                'path_key'    => 'professional_simulation',
-                'level'       => 'professional',
-                'tag'         => 'advanced',
-                'order_index' => 100,
-                'content'     => [
-                    'sections' => [
-                        ['title' => 'Opening Statement',         'estimated_minutes' => 15],
-                        ['title' => 'Presenting Financial Data', 'estimated_minutes' => 25],
-                        ['title' => 'Handling Q&A',              'estimated_minutes' => 20],
-                    ],
-                ],
-                'is_active'   => true,
-            ],
-            [
-                'title'       => 'Client Meeting',
-                'description' => 'Simulasi rapat dengan klien internasional: small talk, agenda, dan negotiating action items.',
-                'path_key'    => 'professional_simulation',
-                'level'       => 'professional',
-                'tag'         => 'advanced',
-                'order_index' => 110,
-                'content'     => [
-                    'sections' => [
-                        ['title' => 'Small Talk & Rapport',   'estimated_minutes' => 10],
-                        ['title' => 'Setting the Agenda',     'estimated_minutes' => 15],
-                        ['title' => 'Action Items & Wrap-up', 'estimated_minutes' => 15],
-                    ],
-                ],
-                'is_active'   => true,
-            ],
-            [
-                'title'       => 'Advanced Negotiation',
-                'description' => 'Negosiasi tingkat lanjut: tactics, objection handling, dan closing language.',
-                'path_key'    => 'industry_ready',
-                'level'       => 'professional',
-                'tag'         => 'advanced',
-                'order_index' => 120,
-                'content'     => [
-                    'sections' => [
-                        ['title' => 'Negotiation Tactics', 'estimated_minutes' => 20],
-                        ['title' => 'Objection Handling',  'estimated_minutes' => 20],
-                        ['title' => 'Closing Language',    'estimated_minutes' => 15],
-                    ],
-                ],
-                'is_active'   => true,
-            ],
-            [
-                'title'       => 'Basic English Foundation',
-                'description' => 'Pondasi Bahasa Inggris untuk pemula: alfabet, ucapan dasar, dan kalimat sederhana.',
-                'path_key'    => 'emergency_foundation',
-                'level'       => 'basic',
-                'tag'         => 'basic',
-                'order_index' => 10,
-                'content'     => [
-                    'sections' => [
-                        ['title' => 'Alphabet & Pronunciation', 'estimated_minutes' => 15],
-                        ['title' => 'Basic Greetings',          'estimated_minutes' => 10],
-                        ['title' => 'Simple Sentences',         'estimated_minutes' => 20],
-                    ],
-                ],
-                'is_active'   => true,
-            ],
-        ];
+                'description' => 'Mempelajari dasar-dasar tenses dalam bahasa Inggris untuk komunikasi sehari-hari.',
+                'level' => 'basic',
+                'tag' => 'basic',
+                'order_index' => 1,
+                'is_active' => true,
+            ]
+        );
 
-        foreach ($modules as $data) {
-            Module::firstOrCreate(
-                ['title' => $data['title'], 'path_key' => $data['path_key']],
-                $data
-            );
-        }
+        Lesson::firstOrCreate(
+            ['module_id' => $modulDasar->id, 'title' => 'Apa itu Tenses?'],
+            [
+                'type' => 'text',
+                'content' => '<p>Tenses adalah bentuk kata kerja dalam bahasa Inggris untuk menunjukkan waktu (sekarang, masa depan, atau masa lalu) terjadinya suatu perbuatan atau peristiwa.</p>',
+                'estimated_minutes' => 5,
+                'order_index' => 1,
+            ]
+        );
+
+        Lesson::firstOrCreate(
+            ['module_id' => $modulDasar->id, 'title' => 'Simple Present Tense'],
+            [
+                'type' => 'video',
+                'content' => '<p>Tonton materi berikut untuk memahami penggunaan Simple Present Tense dalam rutinitas sehari-hari.</p><br><p><i>(Contoh Embed Video)</i></p>',
+                'estimated_minutes' => 10,
+                'order_index' => 2,
+            ]
+        );
+
+
+        // 2. Modul Advanced (Professional Simulation)
+        $modulAdvanced = Module::firstOrCreate(
+            ['title' => 'Advanced Financial Reporting', 'path_key' => 'professional_simulation'],
+            [
+                'description' => 'Bagaimana melakukan presentasi keuangan di depan klien internasional.',
+                'level' => 'advanced',
+                'tag' => 'advanced',
+                'order_index' => 1,
+                'is_active' => true,
+            ]
+        );
+
+        Lesson::firstOrCreate(
+            ['module_id' => $modulAdvanced->id, 'title' => 'Financial Jargon in English'],
+            [
+                'type' => 'text',
+                'content' => '<p>Berikut adalah daftar istilah keuangan tingkat lanjut beserta penggunaannya dalam kalimat laporan tahunan.</p><ul><li><strong>Revenue:</strong> Pendapatan dari aktivitas bisnis normal.</li><li><strong>EBITDA:</strong> Earnings Before Interest, Taxes, Depreciation, and Amortization.</li><li><strong>Amortization:</strong> Pengurangan nilai aset tidak berwujud.</li></ul>',
+                'estimated_minutes' => 8,
+                'order_index' => 1,
+            ]
+        );
     }
 }

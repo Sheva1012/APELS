@@ -23,6 +23,7 @@ class CsvQuestionImporter
     private const VALID_CORRECT_ANSWERS = ['a', 'b', 'c', 'd'];
     private const VALID_TYPES = ['grammar', 'vocabulary'];
     private const VALID_TAGS = ['basic', 'intermediate', 'advanced'];
+    private const VALID_SETS = ['A', 'B', 'C'];
 
     /**
      * Parse CSV content and validate rows.
@@ -49,6 +50,7 @@ class CsvQuestionImporter
 
             if (empty($reasons)) {
                 $valid[] = [
+                    'set'            => strtoupper(trim($record['set'] ?? 'A')),
                     'question'       => trim($record['question'] ?? ''),
                     'option_a'       => trim($record['option_a'] ?? ''),
                     'option_b'       => trim($record['option_b'] ?? ''),
@@ -76,6 +78,12 @@ class CsvQuestionImporter
     private function validateRow(array $record): array
     {
         $reasons = [];
+
+        // set
+        $set = strtoupper(trim($record['set'] ?? ''));
+        if (!in_array($set, self::VALID_SETS, true)) {
+            $reasons[] = "set harus salah satu dari: A, B, C";
+        }
 
         // Required text fields
         foreach (['question', 'option_a', 'option_b', 'option_c', 'option_d'] as $field) {

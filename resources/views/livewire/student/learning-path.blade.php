@@ -71,11 +71,11 @@ new #[Layout('components.layouts.app')] class extends Component {
     <div class="absolute bottom-20 -right-10 w-80 h-80 bg-violet-500/10 dark:bg-violet-600/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
     <div class="absolute top-1/2 left-1/2 w-60 h-60 bg-emerald-500/5 dark:bg-emerald-600/5 rounded-full blur-3xl -z-10 pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
 
-    <div class="max-w-3xl mx-auto px-4">
+    <div class="w-full min-w-0 px-4">
         <!-- Title Section -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-extrabold text-zinc-800 dark:text-zinc-100 tracking-tight">Learning Roadmap</h1>
-            <p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2">Ikuti perjalanan belajarmu dari awal hingga mahir.</p>
+            <p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2">Follow your learning journey from beginner to advanced.</p>
         </div>
 
         @if (empty($modules))
@@ -86,14 +86,14 @@ new #[Layout('components.layouts.app')] class extends Component {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                     </svg>
                 </div>
-                <h3 class="text-lg font-bold text-zinc-800 dark:text-zinc-100 mb-2">Belum Ada Roadmap</h3>
-                <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6 max-w-sm mx-auto">Kerjakan Diagnostic Test terlebih dahulu agar sistem kami dapat menyesuaikan jalur pembelajaran yang optimal untukmu.</p>
+                <h3 class="text-lg font-bold text-zinc-800 dark:text-zinc-100 mb-2">No Roadmap Yet</h3>
+                <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6 max-w-sm mx-auto">Complete the Diagnostic Test first so our system can tailor the optimal learning path for you.</p>
                 <a href="{{ route('diagnostic') }}" wire:navigate
                    class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                     </svg>
-                    Mulai Diagnostic Test
+                    Start Diagnostic Test
                 </a>
             </div>
         @else
@@ -108,7 +108,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 </svg>
                             </div>
                             <div>
-                                <p class="text-[11px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-widest">Jalur Pembelajaran Aktif</p>
+                                <p class="text-[11px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-widest">Active Learning Path</p>
                                 <h2 class="text-lg font-extrabold text-zinc-800 dark:text-zinc-100">{{ $pathLabel }}</h2>
                                 @if ($pathCondition)
                                     <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-mono">{{ $pathCondition }}</p>
@@ -138,7 +138,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                             </div>
                             <div class="text-right">
                                 <p class="text-xs font-bold text-zinc-800 dark:text-zinc-100">{{ $completedCount }}/{{ $totalCount }}</p>
-                                <p class="text-[10px] text-zinc-500">Modul Selesai</p>
+                                <p class="text-[10px] text-zinc-500">Modules Completed</p>
                             </div>
                         </div>
                     </div>
@@ -196,7 +196,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <h3 class="text-sm font-bold text-zinc-400 dark:text-zinc-600 truncate">{{ $module['title'] }}</h3>
                                         <span class="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg bg-zinc-200/80 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-600">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                                            Terkunci
+                                            Locked
                                         </span>
                                     </div>
                                     @if ($module['level'])
@@ -205,7 +205,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     @if ($module['description'])
                                         <p class="text-xs text-zinc-400 dark:text-zinc-600 mt-2 line-clamp-2 leading-relaxed">{{ $module['description'] }}</p>
                                     @endif
-                                    <p class="text-[10px] text-zinc-400 dark:text-zinc-600 mt-3 italic">Selesaikan modul sebelumnya untuk membuka kunci.</p>
+                                    <p class="text-[10px] text-zinc-400 dark:text-zinc-600 mt-3 italic">Complete the previous module to unlock this.</p>
                                 </div>
                             @elseif ($isCompleted)
                                 {{-- Completed card: green accents --}}
@@ -214,7 +214,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <h3 class="text-sm font-bold text-zinc-800 dark:text-zinc-100 truncate">{{ $module['title'] }}</h3>
                                         <span class="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
-                                            Selesai
+                                            Completed
                                         </span>
                                     </div>
                                     <div class="flex items-center gap-2 mt-0.5">
@@ -222,7 +222,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                             <span class="text-[10px] text-zinc-500 dark:text-zinc-400 capitalize font-semibold">Level: {{ $module['level'] }}</span>
                                         @endif
                                         @if ($module['score'])
-                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">• Skor: {{ $module['score'] }}%</span>
+                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">• Score: {{ $module['score'] }}%</span>
                                         @endif
                                     </div>
                                     @if ($module['description'])
@@ -231,7 +231,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     <div class="mt-4">
                                         <a href="{{ route('module-detail', $module['id']) }}" wire:navigate
                                            class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors">
-                                            Lihat Detail
+                                            View Detail
                                             <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                                         </a>
                                     </div>
@@ -243,7 +243,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <h3 class="text-sm font-bold text-zinc-800 dark:text-zinc-100 truncate">{{ $module['title'] }}</h3>
                                         <span class="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 animate-pulse">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                            Sedang Dikerjakan
+                                            In Progress
                                         </span>
                                     </div>
                                     @if ($module['level'])
@@ -256,7 +256,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                         <a href="{{ route('module-detail', $module['id']) }}" wire:navigate
                                            class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                                            Lanjutkan Belajar
+                                            Continue Learning
                                         </a>
                                     </div>
                                 </div>

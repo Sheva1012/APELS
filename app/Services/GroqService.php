@@ -29,13 +29,9 @@ class GroqService
 
     public function __construct()
     {
-        $this->apiKey = config('groq.api_key');
-        $this->baseUrl = config('groq.base_url');
-        $this->timeout = config('groq.timeout');
-
-        if (empty($this->apiKey)) {
-            throw new \RuntimeException('GROQ_API_KEY is not set in environment variables.');
-        }
+        $this->apiKey = config('groq.api_key') ?? '';
+        $this->baseUrl = config('groq.base_url') ?? 'https://api.groq.com/openai/v1';
+        $this->timeout = (int) (config('groq.timeout') ?? 60);
     }
 
     /**
@@ -48,9 +44,14 @@ class GroqService
      */
     public function transcribeAudio(string $audioPath, string $language = 'en'): array
     {
+        if (empty($this->apiKey)) {
+            throw new \RuntimeException('GROQ_API_KEY is not set in environment variables.');
+        }
+
         $model = config('groq.whisper_model', 'whisper-large-v3');
 
         $response = Http::timeout($this->timeout)
+            ->withoutVerifying()
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
             ])
@@ -92,6 +93,10 @@ class GroqService
      */
     public function chatCompletion(array $messages, array $options = []): array
     {
+        if (empty($this->apiKey)) {
+            throw new \RuntimeException('GROQ_API_KEY is not set in environment variables.');
+        }
+
         $model = $options['model'] ?? config('groq.llm_model', 'llama-3.3-70b-versatile');
 
         $payload = [
@@ -114,6 +119,7 @@ class GroqService
         }
 
         $response = Http::timeout($this->timeout)
+            ->withoutVerifying()
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type'  => 'application/json',

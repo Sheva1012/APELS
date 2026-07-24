@@ -11,11 +11,18 @@ use Illuminate\Support\Facades\Storage;
  * Sends audio file to Groq Whisper API, counts words in transcript,
  * and computes a speaking score (0..100).
  *
- * Scoring formula (Req 6.2, 6.3):
- *   - n >= 20 words → score = 100
- *   - 5 <= n < 20   → score = round(n / 20 * 100)
- *   - 0 < n < 5     → score = max(round(n / 20 * 100), 10)
- *   - n = 0         → score = 0
+ * Scoring formula (aligned with APELS.md spec — speaking ≈ 65 for normal speech):
+ *   - n = 0          → score = 0  (no speech detected)
+ *   - 1 ≤ n ≤ 3      → score = 40 (very short, base floor for any speech)
+ *   - 4 ≤ n ≤ 9      → score = round(40 + (n / 50 * 60))   ≈ 45–51%
+ *   - 10 ≤ n ≤ 49    → score = round(50 + (n / 50 * 50))   ≈ 60–99%
+ *   - n ≥ 50         → score = 100
+ *
+ * Rationale: 30–60 seconds of natural speech produces ~50–150 words.
+ *   5 words  → ~45%  (very short sentence, needs more)
+ *  10 words  → ~62%  (short paragraph, fair baseline)
+ *  20 words  → ~74%  (decent intro)
+ *  50+ words → 100%  (fluent speaker)
  *
  * Error handling (Req 6.7, 23.4, 27.1):
  *   - File not found → log error, return 0
@@ -30,19 +37,19 @@ class SpeechToTextService
     ) {}
 
     /**
-     * Analyze audio file and return speaking score (0..100).
+     * Analyze audio file and return speaking score + transcript.
      *
      * @param  string  $audioPath  Relative path on 'private' disk.
-     * @return int                 Speaking score 0..100.
+     * @return array{score: int, transcript: string}
      */
-    public function analyze(string $audioPath): int
+    public function analyze(string $audioPath): array
     {
         // Check file exists on private disk (Req 23.4)
         if (!Storage::disk('private')->exists($audioPath)) {
             Log::error('SpeechToTextService::analyze — file not found', [
                 'audio_path' => $audioPath,
             ]);
-            return 0;
+            return ['score' => 0, 'transcript' => ''];
         }
 
         try {
@@ -53,13 +60,16 @@ class SpeechToTextService
 
             $transcript = $response['text'] ?? '';
 
-            return $this->scoreFromTranscript($transcript);
+            return [
+                'score'      => $this->scoreFromTranscript($transcript),
+                'transcript' => $transcript,
+            ];
         } catch (\Throwable $e) {
             Log::error('SpeechToTextService::analyze — API failure', [
                 'audio_path' => $audioPath,
                 'error'      => $e->getMessage(),
             ]);
-            return 0;
+            return ['score' => 0, 'transcript' => ''];
         }
     }
 
@@ -79,7 +89,10 @@ class SpeechToTextService
     }
 
     /**
-     * Pure scoring logic from word count (Req 6.2, 6.3).
+     * Pure scoring logic from word count.
+     *
+     * Formula aligned with APELS.md spec (speaking ≈ 65 for normal intro speech).
+     * Target: 50 words = 100% (≈ 30–60s of fluent speech).
      *
      * @param  int  $n  Word count >= 0
      * @return int      Score 0..100
@@ -90,16 +103,22 @@ class SpeechToTextService
             return 0;
         }
 
-        $raw = (int) round($n / 20 * 100);
-
-        if ($n >= 20) {
-            return 100;
+        // Very short utterance — any detectable speech gets a base floor of 40
+        if ($n <= 3) {
+            return 40;
         }
 
-        if ($n < 5) {
-            return max($raw, 10); // Req 6.3: minimum 10 for short transcripts
+        // Short phrase (4–9 words): scale from 40 → ~51%
+        if ($n < 10) {
+            return min(59, (int) round(40 + ($n / 50 * 60)));
         }
 
-        return min($raw, 100); // Req 6.2
+        // Normal speech (10–49 words): scale from 60 → 99%
+        if ($n < 50) {
+            return min(99, (int) round(50 + ($n / 50 * 50)));
+        }
+
+        // Fluent speaker — 50+ words = full score
+        return 100;
     }
 }

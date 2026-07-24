@@ -41,7 +41,7 @@ class DiagnosticResultResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')->label('Mahasiswa')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('user.name')->label('Student')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('speaking')->sortable(),
                 Tables\Columns\TextColumn::make('grammar')->sortable(),
                 Tables\Columns\TextColumn::make('vocabulary')->sortable(),
@@ -52,11 +52,11 @@ class DiagnosticResultResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                Tables\Filters\SelectFilter::make('user_id')->relationship('user', 'name')->label('Mahasiswa')->searchable(),
+                Tables\Filters\SelectFilter::make('user_id')->relationship('user', 'name')->label('Student')->searchable(),
                 Tables\Filters\Filter::make('date_range')
                     ->form([
-                        Forms\Components\DatePicker::make('from')->label('Dari'),
-                        Forms\Components\DatePicker::make('until')->label('Sampai'),
+                        Forms\Components\DatePicker::make('from')->label('From'),
+                        Forms\Components\DatePicker::make('until')->label('Until'),
                     ])
                     ->query(function ($query, array $data) {
                         return $query
@@ -64,7 +64,7 @@ class DiagnosticResultResource extends Resource
                             ->when($data['until'] ?? null, fn ($q, $d) => $q->whereDate('created_at', '<=', $d));
                     }),
             ])
-            ->actions([
+            ->recordActions([
                 \Filament\Actions\ViewAction::make(),
                 \Filament\Actions\EditAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
                 \Filament\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),

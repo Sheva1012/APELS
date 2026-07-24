@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LearningPath;
 use App\Models\Module;
 use App\Models\UserLearningPath;
 use App\Models\UserModuleProgress;
@@ -64,7 +65,7 @@ class AdaptiveEngineService
      */
     private function persist(int $userId, string $pathKey, array $modules): void
     {
-        // Single active learning path per user (Req 26.2)
+        // 1. UserLearningPath (tabel lama, backward compat)
         UserLearningPath::updateOrCreate(
             ['user_id' => $userId],
             [
@@ -74,7 +75,17 @@ class AdaptiveEngineService
             ]
         );
 
-        // Module progress — unique per (user_id, module_id) (Req 26.3)
+        // 2. LearningPath (tabel baru sesuai APELS-EXECUTION-SPEC §3)
+        LearningPath::updateOrCreate(
+            ['user_id' => $userId],
+            [
+                'path_name'        => $pathKey,
+                'modules_unlocked' => $modules['unlocked'],
+                'modules_locked'   => $modules['locked'],
+            ]
+        );
+
+        // 3. Module progress — unique per (user_id, module_id) (Req 26.3)
         foreach ($modules['unlocked'] as $moduleId) {
             UserModuleProgress::updateOrCreate(
                 ['user_id' => $userId, 'module_id' => $moduleId],
@@ -104,10 +115,6 @@ class AdaptiveEngineService
         $grammar    = $this->validateScore($scores, 'grammar');
         $vocabulary = $this->validateScore($scores, 'vocabulary');
 
-        // Urutan branching paling spesifik ke paling umum (Req 9.1).
-        if ($speaking < 50 && $grammar < 50 && $vocabulary < 50) {
-            return 'emergency_foundation';
-        }
         if ($speaking < 60 && $vocabulary < 60) {
             return 'fundamental_communication';
         }
@@ -117,15 +124,10 @@ class AdaptiveEngineService
         if ($grammar < 60) {
             return 'grammar_foundation';
         }
-        if ($vocabulary < 60) {
-            return 'vocabulary_builder';
-        }
-        if ($speaking >= 80 && $grammar >= 75 && $vocabulary >= 75) {
-            return 'industry_ready';
-        }
-        if ($speaking >= 70 && $grammar >= 70) {
+        if ($speaking > 70 && $grammar > 70) {
             return 'professional_simulation';
         }
+
         return 'intermediate_path';
     }
 
@@ -183,13 +185,13 @@ class AdaptiveEngineService
      *   3. module.path_key == pathKey → true
      *   4. else → false
      */
-    public function shouldUnlock(Module $module, string $pathKey, array $scores): bool
+    private function shouldUnlock(Module $module, string $pathKey, array $scores): bool
     {
         if ($module->level === 'basic') {
             return true;
         }
 
-        if ($module->level === 'professional') {
+        if ($module->level === 'advanced') {
             $sp = $scores['speaking']   ?? 0;
             $gr = $scores['grammar']    ?? 0;
             $vo = $scores['vocabulary'] ?? 0;

@@ -49,7 +49,8 @@ class EnsureDailyTestLimit
             ->whereDate('created_at', today())
             ->count();
 
-        $alreadyTestedToday = $todayTestCount >= $limit;
+        // $alreadyTestedToday = $todayTestCount >= $limit;
+        $alreadyTestedToday = false; // Temporarily remove limit as requested
 
         if ($alreadyTestedToday) {
             // API / AJAX: kembalikan JSON seperti biasa
