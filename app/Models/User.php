@@ -102,6 +102,16 @@ class User extends Authenticatable implements FilamentUser // implements MustVer
     }
 
     /**
+     * Progress materi (lesson) mahasiswa.
+     *
+     * @return HasMany<UserLessonProgress, $this>
+     */
+    public function lessonProgress(): HasMany
+    {
+        return $this->hasMany(UserLessonProgress::class);
+    }
+
+    /**
      * Feedback otomatis yang diterima mahasiswa.
      *
      * @return HasMany<Feedback, $this>

@@ -91,13 +91,5 @@ new #[Layout('components.layouts.app')] class extends Component {
             </div>
         @endif
 
-        {{-- Tombol mulai latihan --}}
-        <div class="mt-6">
-            <a href="{{ route('exercises', $module->id) }}" wire:navigate>
-                <flux:button variant="primary">
-                    {{ $isCompleted ? 'Ulangi Latihan' : 'Mulai Latihan' }}
-                </flux:button>
-            </a>
-        </div>
     @endif
 </div>

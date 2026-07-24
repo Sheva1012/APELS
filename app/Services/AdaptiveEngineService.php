@@ -195,7 +195,9 @@ class AdaptiveEngineService
             $sp = $scores['speaking']   ?? 0;
             $gr = $scores['grammar']    ?? 0;
             $vo = $scores['vocabulary'] ?? 0;
-            return $sp >= 70 && $gr >= 70 && $vo >= 70;
+            
+            $overall = ($sp + $gr + $vo) / 3;
+            return $overall >= 70;
         }
 
         return $module->path_key === $pathKey;
