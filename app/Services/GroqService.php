@@ -53,14 +53,7 @@ class GroqService
         $stream = fopen($audioPath, 'r');
 
         try {
-            $response = Http::timeout($this->timeout)
-                ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
-                    if ($exception instanceof \Illuminate\Http\Client\RequestException) {
-                        return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
-                    }
-                    return $exception instanceof \Illuminate\Http\Client\ConnectionException;
-                }, throw: false)
-                ->withoutVerifying()
+            $response = $this->createHttpClient()
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                 ])
@@ -140,14 +133,7 @@ class GroqService
             $payload['response_format'] = $options['response_format'];
         }
 
-        $response = Http::timeout($this->timeout)
-            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
-                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
-                    return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
-                }
-                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
-            }, throw: false)
-            ->withoutVerifying()
+        $response = $this->createHttpClient()
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type'  => 'application/json',
@@ -174,6 +160,26 @@ class GroqService
         }
 
         return $response->json();
+    }
+
+    /**
+     * Create a pre-configured HTTP request client.
+     */
+    private function createHttpClient(): \Illuminate\Http\Client\PendingRequest
+    {
+        $client = Http::timeout($this->timeout)
+            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
+                }
+                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+            }, throw: false);
+
+        if (app()->environment('local', 'testing') && config('groq.verify_ssl', false) === false) {
+            $client->withoutVerifying();
+        }
+
+        return $client;
     }
 
     /**
