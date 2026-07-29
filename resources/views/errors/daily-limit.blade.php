@@ -16,6 +16,9 @@
     <title>Tes Hari Ini Sudah Selesai — APELS</title>
     <meta name="description" content="Kamu sudah mengerjakan Diagnostic Test hari ini. Kembalilah besok untuk mengukur perkembanganmu!">
 
+    <link rel="icon" type="image/png" href="{{ asset('images/icon.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('images/icon.png') }}">
+
     {{-- Google Fonts --}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
