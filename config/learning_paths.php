@@ -40,25 +40,59 @@
 
 return [
 
-    'financial_position_reporting' => [
-        'label'     => 'FINANCIAL POSITION & TRANSACTION REPORTING',
-        'color'     => 'blue',
-        'condition' => 'Speaking < 60',
+    'emergency_foundation' => [
+        'label'     => 'Emergency Foundation',
+        'color'     => 'red',
+        'condition' => 'Overall Score < 40',
         'modules'   => [],
     ],
 
-    'income_statement_analysis' => [
-        'label'     => 'INCOME STATEMENT & PERFORMANCE ANALYSIS',
+    'fundamental_communication' => [
+        'label'     => 'Fundamental Communication',
+        'color'     => 'orange',
+        'condition' => 'Speaking < 50',
+        'modules'   => [],
+    ],
+
+    'basic_speaking' => [
+        'label'     => 'Basic Speaking',
         'color'     => 'yellow',
-        'condition' => 'Semua skor 60-70',
+        'condition' => 'Speaking >= 50 && Speaking < 70',
         'modules'   => [],
     ],
 
-    'cash_flow_auditing_taxation' => [
-        'label'     => 'CASH FLOW, AUDITING & TAXATION',
-        'color'     => 'green',
-        'condition' => 'Speaking >= 70',
+    'grammar_foundation' => [
+        'label'     => 'Grammar Foundation',
+        'color'     => 'blue',
+        'condition' => 'Grammar < 60',
         'modules'   => [],
     ],
 
+    'vocabulary_builder' => [
+        'label'     => 'Vocabulary Builder',
+        'color'     => 'emerald',
+        'condition' => 'Vocabulary < 60',
+        'modules'   => [],
+    ],
+
+    'intermediate_path' => [
+        'label'     => 'Intermediate Path',
+        'color'     => 'indigo',
+        'condition' => 'Overall >= 60 && Overall < 80',
+        'modules'   => [],
+    ],
+
+    'professional_simulation' => [
+        'label'     => 'Professional Simulation',
+        'color'     => 'purple',
+        'condition' => 'Overall >= 80 && Overall < 90',
+        'modules'   => [],
+    ],
+
+    'industry_ready' => [
+        'label'     => 'Industry Ready',
+        'color'     => 'slate',
+        'condition' => 'Overall >= 90',
+        'modules'   => [],
+    ],
 ];

@@ -7,7 +7,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Computed;
 use Livewire\Volt\Component;
 
-new #[Layout('components.layouts.learning')] class extends Component {
+new #[Layout('components.layouts.app-lesson')] class extends Component {
     public ?Lesson $lesson = null;
     public array $completedLessonIds = [];
 
@@ -76,10 +76,11 @@ new #[Layout('components.layouts.learning')] class extends Component {
         $allLessons = $this->getAllLessonsInPath();
         $currentIndex = $allLessons->search(fn($l) => $l->id === $this->lesson->id);
 
-        if ($currentIndex !== false && $currentIndex < $allLessons->count() - 1) {
-            $nextLesson = $allLessons[$currentIndex + 1];
-            $this->redirect(route('lesson-detail', $nextLesson->id), navigate: true);
-        } else {
+        // Check if this was the last lesson of the CURRENT module
+        $currentModuleLessons = $this->lesson->module->lessons()->where('is_active', true)->orderBy('order_index')->get();
+        $isLastLessonInModule = $currentModuleLessons->last()->id === $this->lesson->id;
+
+        if ($isLastLessonInModule) {
             // Mark the module as completed since there are no exercises
             \App\Models\UserModuleProgress::updateOrCreate(
                 ['user_id' => auth()->id(), 'module_id' => $this->lesson->module_id],
@@ -93,13 +94,18 @@ new #[Layout('components.layouts.learning')] class extends Component {
                 ->first();
                 
             if ($nextModule) {
-                \App\Models\UserModuleProgress::updateOrCreate(
+                \App\Models\UserModuleProgress::firstOrCreate(
                     ['user_id' => auth()->id(), 'module_id' => $nextModule->id],
                     ['is_unlocked' => true]
                 );
             }
-            
-            // End of learning path or module, redirect to learning path
+        }
+
+        if ($currentIndex !== false && $currentIndex < $allLessons->count() - 1) {
+            $nextLesson = $allLessons[$currentIndex + 1];
+            $this->redirect(route('lesson-detail', $nextLesson->id), navigate: true);
+        } else {
+            // End of learning path
             $this->redirect(route('learning-path'), navigate: true);
         }
     }
@@ -116,25 +122,18 @@ new #[Layout('components.layouts.learning')] class extends Component {
     }
 }; ?>
 
-<div class="flex flex-col h-screen overflow-hidden bg-white dark:bg-[#121212]">
+<div class="flex flex-col h-full overflow-hidden bg-white dark:bg-[#121212]" x-data="{ showMobileModules: false }">
     <!-- Top Header (Fixed) -->
     <header class="h-14 lg:h-16 flex items-center justify-between px-4 lg:px-6 border-b border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#121212] shrink-0 z-30">
         <a href="{{ route('learning-path') }}" wire:navigate class="flex items-center gap-3 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
             <svg class="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
             <span class="hidden sm:inline">Belajar {{ $this->lesson->module->title ?? 'Modul' }}</span>
         </a>
-        <div class="flex items-center gap-5">
 
-            <!-- Dark mode toggle mock -->
-            <button class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-            </button>
-            
-            <!-- Profile mock -->
-            <div class="w-8 h-8 bg-orange-500 text-white font-bold flex items-center justify-center rounded-full text-[11px] shadow-sm">
-                {{ auth()->user()->initials() }}
-            </div>
-        </div>
+        <!-- Hamburger for Mobile Modules -->
+        <button @click="showMobileModules = true" class="lg:hidden p-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
     </header>
 
     <!-- Main Body Layout -->
@@ -199,13 +198,28 @@ new #[Layout('components.layouts.learning')] class extends Component {
             </div>
         </div>
         
-        <!-- Right Sidebar (Fixed) -->
-        <aside class="hidden lg:flex w-[320px] xl:w-[350px] bg-[#FAFAFA] dark:bg-[#18181b] border-l border-gray-200 dark:border-zinc-800 flex-col shrink-0 relative z-20">
+        <!-- Mobile Overlay Background -->
+        <div x-show="showMobileModules" 
+             x-transition:enter="transition-opacity ease-linear duration-300" 
+             x-transition:enter-start="opacity-0" 
+             x-transition:enter-end="opacity-100" 
+             x-transition:leave="transition-opacity ease-linear duration-300" 
+             x-transition:leave-start="opacity-100" 
+             x-transition:leave-end="opacity-0" 
+             @click="showMobileModules = false"
+             class="fixed inset-0 bg-black/50 z-40 lg:hidden" x-cloak></div>
+
+        <!-- Right Sidebar (Fixed Desktop / Drawer Mobile) -->
+        <aside class="flex flex-col w-[300px] sm:w-[320px] xl:w-[350px] bg-[#FAFAFA] dark:bg-[#18181b] border-l border-gray-200 dark:border-zinc-800 shrink-0 z-50 transition-transform duration-300 fixed inset-y-0 right-0 lg:relative lg:translate-x-0"
+               :class="showMobileModules ? 'translate-x-0 shadow-2xl' : 'translate-x-full lg:shadow-none'">
             <!-- Header -->
-            <div class="flex items-center border-b border-gray-200 dark:border-zinc-800 pt-5 px-6">
+            <div class="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pt-5 px-6">
                 <h3 class="pb-3 text-[14px] font-bold text-zinc-800 dark:text-zinc-200">
                     Daftar Modul
                 </h3>
+                <button @click="showMobileModules = false" class="pb-3 lg:hidden text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
             
             <!-- Progress Section -->

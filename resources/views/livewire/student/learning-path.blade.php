@@ -38,24 +38,55 @@ new #[Layout('components.layouts.app')] class extends Component {
         }
 
         $progress = UserModuleProgress::where('user_id', $userId)
-            ->with('module')
+            ->with('module.lessons')
             ->get()
             ->sortBy(fn ($mp) => $mp->module?->order_index ?? 0);
 
-        $this->modules = $progress->map(fn ($mp) => [
-            'id'           => $mp->module_id,
-            'title'        => $mp->module?->title ?? 'Unknown',
-            'description'  => $mp->module?->description ?? '',
-            'level'        => $mp->module?->level ?? '',
-            'is_unlocked'  => $mp->is_unlocked,
-            'is_completed' => $mp->is_completed,
-            'score'        => $mp->score,
-            'status'       => match (true) {
-                !$mp->is_unlocked => 'Locked',
-                $mp->is_completed => 'Completed',
-                default           => 'In Progress',
-            },
-        ])->values()->toArray();
+        $completedLessonIds = \App\Models\UserLessonProgress::where('user_id', $userId)
+            ->pluck('lesson_id')
+            ->toArray();
+
+        $this->modules = $progress->map(function ($mp) use ($completedLessonIds) {
+            $moduleLessons = $mp->module?->lessons ?? collect();
+            $totalLessons = $moduleLessons->where('is_active', true)->count();
+            $completedLessons = $moduleLessons->where('is_active', true)->whereIn('id', $completedLessonIds)->count();
+
+            $progressPercent = $totalLessons > 0 ? (int) round(($completedLessons / $totalLessons) * 100) : 0;
+            
+            // Auto-complete module if all lessons are done (retroactive fix)
+            if ($progressPercent === 100 && !$mp->is_completed) {
+                $mp->update(['is_completed' => true, 'score' => 100]);
+                $mp->is_completed = true;
+                
+                $nextModule = \App\Models\Module::where('path_key', $mp->module->path_key)
+                    ->where('order_index', '>', $mp->module->order_index)
+                    ->orderBy('order_index')
+                    ->first();
+                    
+                if ($nextModule) {
+                    \App\Models\UserModuleProgress::firstOrCreate(
+                        ['user_id' => $userId, 'module_id' => $nextModule->id],
+                        ['is_unlocked' => true]
+                    );
+                }
+            }
+
+            return [
+                'id'           => $mp->module_id,
+                'title'        => $mp->module?->title ?? 'Unknown',
+                'description'  => $mp->module?->description ?? '',
+                'level'        => $mp->module?->level ?? '',
+                'is_unlocked'  => $mp->is_unlocked,
+                'is_completed' => $mp->is_completed,
+                'score'        => $mp->score,
+                'progress_percent' => $progressPercent,
+                'status'       => match (true) {
+                    !$mp->is_unlocked => 'Locked',
+                    $mp->is_completed => 'Completed',
+                    default           => 'In Progress',
+                },
+            ];
+        })->values()->toArray();
 
         $this->totalCount = count($this->modules);
         $this->completedCount = collect($this->modules)->where('is_completed', true)->count();
@@ -110,9 +141,6 @@ new #[Layout('components.layouts.app')] class extends Component {
                             <div>
                                 <p class="text-[11px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-widest">Active Learning Path</p>
                                 <h2 class="text-lg font-extrabold text-zinc-800 dark:text-zinc-100">{{ $pathLabel }}</h2>
-                                @if ($pathCondition)
-                                    <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-mono">{{ $pathCondition }}</p>
-                                @endif
                             </div>
                         </div>
 
@@ -254,8 +282,19 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     @if ($module['level'])
                                         <span class="text-[10px] text-zinc-500 dark:text-zinc-400 capitalize font-semibold">Level: {{ $module['level'] }}</span>
                                     @endif
+                                    
+                                    <!-- Progress Bar for In Progress Module -->
+                                    <div class="mt-3">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="text-[10px] font-bold text-indigo-700 dark:text-indigo-400">{{ $module['progress_percent'] }}% Selesai</span>
+                                        </div>
+                                        <div class="w-full bg-indigo-100 dark:bg-zinc-800 rounded-full h-1.5">
+                                            <div class="bg-gradient-to-r from-indigo-500 to-violet-600 h-1.5 rounded-full transition-all duration-700" style="width: {{ $module['progress_percent'] }}%"></div>
+                                        </div>
+                                    </div>
+
                                     @if ($module['description'])
-                                        <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">{{ $module['description'] }}</p>
+                                        <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-3 line-clamp-2 leading-relaxed">{{ $module['description'] }}</p>
                                     @endif
                                     <div class="mt-4">
                                         @php
