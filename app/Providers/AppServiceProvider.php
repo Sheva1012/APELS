@@ -23,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
             if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
                 // Cache settings for 1 hour to prevent DB query on every request
                 $settings = \Illuminate\Support\Facades\Cache::remember('app_settings', 3600, function () {
-                    return \App\Models\Setting::pluck('value', 'key')->toArray();
+                    return \App\Models\Setting::all()->pluck('value', 'key')->toArray();
                 });
 
                 if (isset($settings['GROQ_API_KEY'])) {

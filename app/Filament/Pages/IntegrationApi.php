@@ -39,11 +39,10 @@ class IntegrationApi extends Page implements HasForms
 
     public function mount(): void
     {
-        $settings = Setting::pluck('value', 'key')->toArray();
+        $settings = Setting::all()->pluck('value', 'key')->toArray();
 
         $this->form->fill([
             'GROQ_API_KEY' => $settings['GROQ_API_KEY'] ?? env('GROQ_API_KEY', ''),
-            'APELS_AUDIO_MAX_MB' => $settings['APELS_AUDIO_MAX_MB'] ?? env('APELS_AUDIO_MAX_MB', 10),
             'APELS_STT_TIMEOUT' => $settings['APELS_STT_TIMEOUT'] ?? env('APELS_STT_TIMEOUT', 60),
             'APELS_NLP_TIMEOUT' => $settings['APELS_NLP_TIMEOUT'] ?? env('APELS_NLP_TIMEOUT', 30),
         ]);
@@ -64,13 +63,8 @@ class IntegrationApi extends Page implements HasForms
                             ->required(),
                     ]),
                 Section::make('System Settings')
-                    ->description('Konfigurasi batasan sistem untuk upload dan durasi (Timeout).')
+                    ->description('Konfigurasi batasan durasi (Timeout) layanan AI.')
                     ->schema([
-                        TextInput::make('APELS_AUDIO_MAX_MB')
-                            ->label('Max Audio Size (MB)')
-                            ->numeric()
-                            ->helperText('Batas maksimal ukuran file audio yang dapat diunggah mahasiswa.')
-                            ->required(),
                         TextInput::make('APELS_STT_TIMEOUT')
                             ->label('STT Timeout (Detik)')
                             ->numeric()

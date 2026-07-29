@@ -49,11 +49,12 @@ class GroqService
         }
 
         $model = config('groq.whisper_model', 'whisper-large-v3');
+        $timeout = (int) (config('apels.stt_timeout') ?? config('groq.timeout') ?? 60);
 
         $stream = fopen($audioPath, 'r');
 
         try {
-            $response = $this->createHttpClient()
+            $response = $this->createHttpClient($timeout)
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                 ])
@@ -62,6 +63,10 @@ class GroqService
                     'model'    => $model,
                     'language' => $language,
                 ]);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            $errorMsg = "Layanan Speech-to-Text (Whisper) melebihi batas waktu (timeout {$timeout} detik). Silakan coba lagi.";
+            Log::error("GroqService::transcribeAudio — {$errorMsg}", ['error' => $e->getMessage(), 'audio_path' => $audioPath]);
+            throw new \RuntimeException($errorMsg, 408, $e);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -72,7 +77,7 @@ class GroqService
             $status = $response->status();
             $errorMsg = match ($status) {
                 429 => 'Layanan Groq API melebihi batas (rate limit 30 req/menit). Silakan coba lagi beberapa saat.',
-                500, 502, 503, 504 => 'Layanan Groq API sedang tidak dapat diakses. Silakan coba lagi nanti.',
+                500, 502, 503, 504 => "Layanan Speech-to-Text (Whisper) mengalami gangguan/timeout ({$timeout} detik). Silakan coba lagi nanti.",
                 401, 403 => 'Otentikasi Groq API gagal. Periksa GROQ_API_KEY.',
                 default => "Groq API Error (HTTP {$status}): " . $response->body(),
             };
@@ -97,6 +102,7 @@ class GroqService
      *     model?: string,
      *     max_tokens?: int,
      *     temperature?: float,
+     *     timeout?: int,
      *     response_format?: array{type: string}
      * }  $options
      * @return array{
@@ -113,6 +119,7 @@ class GroqService
         }
 
         $model = $options['model'] ?? config('groq.llm_model', 'llama-3.3-70b-versatile');
+        $timeout = (int) ($options['timeout'] ?? config('apels.nlp_timeout') ?? config('groq.timeout') ?? 30);
 
         $payload = [
             'model'    => $model,
@@ -133,18 +140,24 @@ class GroqService
             $payload['response_format'] = $options['response_format'];
         }
 
-        $response = $this->createHttpClient()
-            ->withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
-                'Content-Type'  => 'application/json',
-            ])
-            ->post($this->baseUrl . '/chat/completions', $payload);
+        try {
+            $response = $this->createHttpClient($timeout)
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type'  => 'application/json',
+                ])
+                ->post($this->baseUrl . '/chat/completions', $payload);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            $errorMsg = "Layanan NLP (Llama 3) melebihi batas waktu (timeout {$timeout} detik). Silakan coba lagi.";
+            Log::error("GroqService::chatCompletion — {$errorMsg}", ['error' => $e->getMessage(), 'model' => $model]);
+            throw new \RuntimeException($errorMsg, 408, $e);
+        }
 
         if ($response->failed()) {
             $status = $response->status();
             $errorMsg = match ($status) {
                 429 => 'Layanan Groq API melebihi batas (rate limit 30 req/menit). Silakan coba lagi beberapa saat.',
-                500, 502, 503, 504 => 'Layanan Groq API sedang tidak dapat diakses. Silakan coba lagi nanti.',
+                500, 502, 503, 504 => "Layanan NLP (Llama 3) mengalami gangguan/timeout ({$timeout} detik). Silakan coba lagi nanti.",
                 401, 403 => 'Otentikasi Groq API gagal. Periksa GROQ_API_KEY.',
                 default => "Groq API Error (HTTP {$status}): " . $response->body(),
             };
@@ -165,9 +178,11 @@ class GroqService
     /**
      * Create a pre-configured HTTP request client.
      */
-    private function createHttpClient(): \Illuminate\Http\Client\PendingRequest
+    private function createHttpClient(?int $timeout = null): \Illuminate\Http\Client\PendingRequest
     {
-        $client = Http::timeout($this->timeout)
+        $effectiveTimeout = $timeout ?? $this->timeout;
+
+        $client = Http::timeout($effectiveTimeout)
             ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
                 if ($exception instanceof \Illuminate\Http\Client\RequestException) {
                     return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
