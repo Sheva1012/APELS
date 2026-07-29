@@ -1,140 +1,250 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
+    <title>Export Bank Soal — APELS</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1a1a2e; background: #fff; }
-
-        .header {
-            background: linear-gradient(135deg, #1e3a8a 0%, #4f46e5 100%);
-            color: white;
-            padding: 18px 24px;
-            margin-bottom: 16px;
+        @page {
+            margin: 25mm 15mm 18mm 15mm;
         }
-        .header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
-        .header p  { font-size: 9px; opacity: 0.8; margin-top: 3px; }
-        .meta { font-size: 8px; opacity: 0.7; margin-top: 6px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'DejaVu Sans', Helvetica, Arial, sans-serif;
+            font-size: 9.5px;
+            line-height: 1.4;
+            color: #1e293b;
+            background: #ffffff;
+        }
 
-        table {
+        /* Header Table */
+        table.header-table {
             width: 100%;
+            border-bottom: 2px solid #4f46e5;
+            padding-bottom: 14px;
+            margin-bottom: 25px;
             border-collapse: collapse;
-            margin: 0 16px;
-            width: calc(100% - 32px);
         }
-        thead tr {
-            background: #1e3a8a;
-            color: white;
-        }
-        thead th {
-            padding: 7px 6px;
-            text-align: left;
-            font-size: 8px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        }
-        tbody tr:nth-child(even) { background: #f0f4ff; }
-        tbody tr:nth-child(odd)  { background: #ffffff; }
-        tbody td {
-            padding: 5px 6px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 8px;
-            vertical-align: top;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-size: 7px;
-            font-weight: 600;
-        }
-        .badge-grammar    { background: #dbeafe; color: #1e40af; }
-        .badge-vocabulary { background: #d1fae5; color: #065f46; }
-        .badge-advanced   { background: #fde8e8; color: #b91c1c; }
-        .badge-intermediate { background: #fef3c7; color: #92400e; }
-        .badge-basic      { background: #e0f2fe; color: #075985; }
-        .badge-set-a      { background: #ede9fe; color: #5b21b6; }
-        .badge-set-b      { background: #fef9c3; color: #713f12; }
-        .badge-set-c      { background: #dcfce7; color: #14532d; }
-        .dot-active   { color: #16a34a; font-size: 11px; }
-        .dot-inactive { color: #dc2626; font-size: 11px; }
-
-        .footer {
-            margin-top: 14px;
-            text-align: center;
-            font-size: 7px;
-            color: #9ca3af;
+        table.header-table td {
+            vertical-align: middle;
+            border: none;
+            padding-top: 10px;
             padding-bottom: 10px;
         }
+        .brand-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e1b4b;
+            line-height: 1.4;
+        }
+        .brand-subtitle {
+            font-size: 10px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+        .meta-info {
+            text-align: right;
+            font-size: 9px;
+            color: #475569;
+            line-height: 1.6;
+        }
 
-        .q-text { max-width: 200px; }
-        .opt-text { max-width: 90px; color: #374151; }
+        /* Questions Table */
+        table.questions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table.questions-table th {
+            background-color: #1e293b;
+            color: #ffffff;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            padding: 7px 6px;
+            border: 1px solid #1e293b;
+            text-align: left;
+        }
+        table.questions-table td {
+            padding: 6px 6px;
+            border: 1px solid #cbd5e1;
+            vertical-align: top;
+            font-size: 9px;
+        }
+        table.questions-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* Columns */
+        .col-num { width: 4%; text-align: center; font-weight: bold; }
+        .col-set { width: 6%; text-align: center; }
+        .col-question { width: 33%; }
+        .col-options { width: 40%; }
+        .col-meta { width: 11%; }
+        .col-status { width: 6%; text-align: center; }
+
+        /* Options Grid */
+        table.options-grid {
+            width: 100%;
+            border-collapse: collapse;
+            border: none;
+        }
+        table.options-grid td {
+            width: 50%;
+            border: none;
+            padding: 1px 2px;
+            font-size: 8.5px;
+        }
+        .opt-box {
+            padding: 3px 5px;
+            border-radius: 3px;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
+        .opt-box.is-correct {
+            background-color: #dcfce7;
+            border-color: #86efac;
+            color: #15803d;
+            font-weight: bold;
+        }
+        .opt-letter {
+            font-weight: bold;
+            margin-right: 2px;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 8px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .badge-set-a { background-color: #ede9fe; color: #6d28d9; }
+        .badge-set-b { background-color: #fef3c7; color: #b45309; }
+        .badge-set-c { background-color: #e0e7ff; color: #3730a3; }
+
+        .badge-grammar { background-color: #dbeafe; color: #1d4ed8; }
+        .badge-vocabulary { background-color: #dcfce7; color: #15803d; }
+
+        .badge-basic { background-color: #f1f5f9; color: #475569; }
+        .badge-intermediate { background-color: #ffedd5; color: #c2410c; }
+        .badge-advanced { background-color: #ffe4e6; color: #be123c; }
+
+        .status-active { color: #16a34a; font-weight: bold; }
+        .status-inactive { color: #dc2626; font-weight: bold; }
+
+        /* Footer */
+        .footer {
+            margin-top: 10px;
+            font-size: 8px;
+            color: #94a3b8;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 5px;
+        }
     </style>
 </head>
 <body>
+    <div style="padding-top: 40px; padding-left: 20px; padding-right: 20px;">
+    <table class="header-table">
+        <tr>
+            <td>
+                <div class="brand-title">APELS — Bank Soal Diagnostic Test</div>
+                <div class="brand-subtitle">Adaptive Professional English Learning System</div>
+            </td>
+            <td class="meta-info">
+                <div>Tanggal Export: <strong>{{ now()->format('d/m/Y H:i') }}</strong></div>
+                <div>Total Soal: <strong>{{ $questions->count() }} Soal</strong></div>
+            </td>
+        </tr>
+    </table>
 
-<div class="header">
-    <h1>📋 APELS — Questions Export</h1>
-    <p>AI-Powered English Learning System</p>
-    <div class="meta">
-        Exported: {{ now()->format('d F Y, H:i') }} &nbsp;|&nbsp;
-        Total Questions: {{ $questions->count() }}
+    <table class="questions-table">
+        <thead>
+            <tr>
+                <th class="col-num">#</th>
+                <th class="col-set">Set</th>
+                <th class="col-question">Pertanyaan / Soal</th>
+                <th class="col-options">Pilihan Jawaban (Kunci ★)</th>
+                <th class="col-meta">Kategori</th>
+                <th class="col-status">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($questions as $i => $q)
+            <tr>
+                <td class="col-num">{{ $i + 1 }}</td>
+                <td class="col-set">
+                    <span class="badge badge-set-{{ strtolower($q->set) }}">Set {{ strtoupper($q->set) }}</span>
+                </td>
+                <td class="col-question">
+                    <strong>{{ $q->question }}</strong>
+                </td>
+                <td class="col-options">
+                    <table class="options-grid">
+                        <tr>
+                            <td>
+                                <div class="opt-box {{ strtolower($q->correct_answer) === 'a' ? 'is-correct' : '' }}">
+                                    <span class="opt-letter">A.</span> {{ $q->option_a }}
+                                    @if(strtolower($q->correct_answer) === 'a') ★ @endif
+                                </div>
+                            </td>
+                            <td>
+                                <div class="opt-box {{ strtolower($q->correct_answer) === 'b' ? 'is-correct' : '' }}">
+                                    <span class="opt-letter">B.</span> {{ $q->option_b }}
+                                    @if(strtolower($q->correct_answer) === 'b') ★ @endif
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="opt-box {{ strtolower($q->correct_answer) === 'c' ? 'is-correct' : '' }}">
+                                    <span class="opt-letter">C.</span> {{ $q->option_c }}
+                                    @if(strtolower($q->correct_answer) === 'c') ★ @endif
+                                </div>
+                            </td>
+                            <td>
+                                <div class="opt-box {{ strtolower($q->correct_answer) === 'd' ? 'is-correct' : '' }}">
+                                    <span class="opt-letter">D.</span> {{ $q->option_d }}
+                                    @if(strtolower($q->correct_answer) === 'd') ★ @endif
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <td class="col-meta">
+                    <div style="margin-bottom: 3px;">
+                        <span class="badge badge-{{ strtolower($q->type) }}">{{ ucfirst($q->type) }}</span>
+                    </div>
+                    <div style="margin-bottom: 3px;">
+                        <span class="badge badge-{{ strtolower($q->tag) }}">{{ ucfirst($q->tag) }}</span>
+                    </div>
+                    <div style="font-size: 8px; color: #64748b;">
+                        Diff: Level {{ $q->difficulty }}
+                    </div>
+                </td>
+                <td class="col-status">
+                    @if($q->is_active)
+                        <span class="status-active">Aktif</span>
+                    @else
+                        <span class="status-inactive">Off</span>
+                    @endif
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Dokumen Bank Soal APELS &nbsp;•&nbsp; Digenerate otomatis pada {{ now()->format('d F Y, H:i') }}
     </div>
-</div>
-
-<table>
-    <thead>
-        <tr>
-            <th style="width:18px">#</th>
-            <th style="width:20px">Set</th>
-            <th style="width:195px">Question</th>
-            <th style="width:75px">Option A</th>
-            <th style="width:75px">Option B</th>
-            <th style="width:75px">Option C</th>
-            <th style="width:75px">Option D</th>
-            <th style="width:22px">Ans</th>
-            <th style="width:45px">Type</th>
-            <th style="width:50px">Tag</th>
-            <th style="width:18px">Dif</th>
-            <th style="width:18px">Act</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach ($questions as $i => $q)
-        <tr>
-            <td>{{ $i + 1 }}</td>
-            <td>
-                <span class="badge badge-set-{{ strtolower($q->set) }}">{{ $q->set }}</span>
-            </td>
-            <td class="q-text">{{ $q->question }}</td>
-            <td class="opt-text">{{ $q->option_a }}</td>
-            <td class="opt-text">{{ $q->option_b }}</td>
-            <td class="opt-text">{{ $q->option_c }}</td>
-            <td class="opt-text">{{ $q->option_d }}</td>
-            <td style="font-weight:700; color:#4f46e5; text-align:center;">{{ strtoupper($q->correct_answer) }}</td>
-            <td>
-                <span class="badge badge-{{ $q->type }}">{{ ucfirst($q->type) }}</span>
-            </td>
-            <td>
-                <span class="badge badge-{{ $q->tag }}">{{ ucfirst($q->tag) }}</span>
-            </td>
-            <td style="text-align:center;">{{ $q->difficulty }}</td>
-            <td style="text-align:center;">
-                @if($q->is_active)
-                    <span class="dot-active">✓</span>
-                @else
-                    <span class="dot-inactive">✗</span>
-                @endif
-            </td>
-        </tr>
-        @endforeach
-    </tbody>
-</table>
-
-<div class="footer">
-    APELS — AI-Powered English Learning System &nbsp;|&nbsp; Generated automatically on {{ now()->format('d M Y') }}
-</div>
+    </div>
 
 </body>
 </html>

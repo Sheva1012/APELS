@@ -23,6 +23,11 @@ class UserResource extends Resource
         return auth()->user()?->hasRole('admin') ?? false;
     }
 
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with(['roles']);
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -60,7 +65,23 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('roles.name')->label('Role')->badge(),
                 Tables\Columns\TextColumn::make('created_at')->dateTime('d M Y')->sortable(),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('role')
+                    ->label('Role')
+                    ->options([
+                        'admin'     => 'Admin',
+                        'dosen'     => 'Dosen',
+                        'mahasiswa' => 'Mahasiswa',
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) {
+                        return $query->when(
+                            $data['value'] ?? null,
+                            fn ($q, $role) => $q->whereHas('roles', fn ($r) => $r->where('name', $role))
+                        );
+                    }),
+            ])
             ->recordActions([
+                \Filament\Actions\ViewAction::make(),
                 \Filament\Actions\EditAction::make(),
                 \Filament\Actions\DeleteAction::make(),
             ])
@@ -74,6 +95,7 @@ class UserResource extends Resource
         return [
             'index'  => Pages\ListUsers::route('/'),
             'create' => Pages\CreateUser::route('/create'),
+            'view'   => Pages\ViewUser::route('/{record}'),
             'edit'   => Pages\EditUser::route('/{record}/edit'),
         ];
     }

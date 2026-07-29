@@ -97,7 +97,7 @@ class ListQuestions extends ListRecords
                     $questions = \App\Models\Question::orderBy('set')->orderBy('type')->orderBy('tag')->get();
 
                     $pdf = Pdf::loadView('pdf.questions-export', compact('questions'))
-                        ->setPaper('a3', 'landscape');
+                        ->setPaper('a4', 'landscape');
 
                     $filename = 'questions_export_' . now()->format('Ymd_His') . '.pdf';
 

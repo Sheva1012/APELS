@@ -63,7 +63,7 @@ class ModuleResource extends Resource
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->recordActions([\Filament\Actions\EditAction::make()])
+            ->recordActions([\Filament\Actions\ViewAction::make(), \Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
             ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
     }
 
@@ -79,6 +79,7 @@ class ModuleResource extends Resource
         return [
             'index'  => Pages\ListModules::route('/'),
             'create' => Pages\CreateModule::route('/create'),
+            'view'   => Pages\ViewModule::route('/{record}'),
             'edit'   => Pages\EditModule::route('/{record}/edit'),
         ];
     }

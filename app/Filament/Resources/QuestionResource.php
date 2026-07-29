@@ -72,7 +72,7 @@ class QuestionResource extends Resource
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->recordActions([\Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
+            ->recordActions([\Filament\Actions\ViewAction::make(), \Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
             ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
     }
 
@@ -81,6 +81,7 @@ class QuestionResource extends Resource
         return [
             'index'  => Pages\ListQuestions::route('/'),
             'create' => Pages\CreateQuestion::route('/create'),
+            'view'   => Pages\ViewQuestion::route('/{record}'),
             'edit'   => Pages\EditQuestion::route('/{record}/edit'),
         ];
     }

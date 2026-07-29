@@ -27,6 +27,11 @@ class DiagnosticResultResource extends Resource
         return auth()->user()?->hasRole('admin') ?? false;
     }
 
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with(['user']);
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -65,7 +70,6 @@ class DiagnosticResultResource extends Resource
                     }),
             ])
             ->recordActions([
-                \Filament\Actions\ViewAction::make(),
                 \Filament\Actions\EditAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
                 \Filament\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
             ]);

@@ -30,6 +30,8 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->brandName('APELS')
             ->favicon(asset('images/icon.png'))
+            ->spa()
+            ->unsavedChangesAlerts()
             ->colors([
                 'primary' => Color::Amber,
             ])
