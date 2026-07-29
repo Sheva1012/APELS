@@ -51,6 +51,12 @@ class GroqService
         $model = config('groq.whisper_model', 'whisper-large-v3');
 
         $response = Http::timeout($this->timeout)
+            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
+                }
+                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+            }, throw: false)
             ->withoutVerifying()
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -62,13 +68,21 @@ class GroqService
             ]);
 
         if ($response->failed()) {
-            Log::error('GroqService::transcribeAudio — API request failed', [
-                'status'       => $response->status(),
+            $status = $response->status();
+            $errorMsg = match ($status) {
+                429 => 'Layanan Groq API melebihi batas (rate limit 30 req/menit). Silakan coba lagi beberapa saat.',
+                500, 502, 503, 504 => 'Layanan Groq API sedang tidak dapat diakses. Silakan coba lagi nanti.',
+                401, 403 => 'Otentikasi Groq API gagal. Periksa GROQ_API_KEY.',
+                default => "Groq API Error (HTTP {$status}): " . $response->body(),
+            };
+
+            Log::error("GroqService::transcribeAudio — {$errorMsg}", [
+                'status'       => $status,
                 'body'         => $response->body(),
                 'audio_path'   => $audioPath,
             ]);
 
-            $response->throw();
+            throw new \RuntimeException($errorMsg, $status);
         }
 
         return $response->json();
@@ -89,7 +103,7 @@ class GroqService
      *     choices: array<int, array{message: array{content: string}}>,
      *     usage?: array
      * }
-     * @throws \Illuminate\Http\Client\RequestException
+     * @throws \RuntimeException
      */
     public function chatCompletion(array $messages, array $options = []): array
     {
@@ -119,6 +133,12 @@ class GroqService
         }
 
         $response = Http::timeout($this->timeout)
+            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
+                }
+                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+            }, throw: false)
             ->withoutVerifying()
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -127,14 +147,22 @@ class GroqService
             ->post($this->baseUrl . '/chat/completions', $payload);
 
         if ($response->failed()) {
-            Log::error('GroqService::chatCompletion — API request failed', [
-                'status'   => $response->status(),
+            $status = $response->status();
+            $errorMsg = match ($status) {
+                429 => 'Layanan Groq API melebihi batas (rate limit 30 req/menit). Silakan coba lagi beberapa saat.',
+                500, 502, 503, 504 => 'Layanan Groq API sedang tidak dapat diakses. Silakan coba lagi nanti.',
+                401, 403 => 'Otentikasi Groq API gagal. Periksa GROQ_API_KEY.',
+                default => "Groq API Error (HTTP {$status}): " . $response->body(),
+            };
+
+            Log::error("GroqService::chatCompletion — {$errorMsg}", [
+                'status'   => $status,
                 'body'     => $response->body(),
                 'model'    => $model,
                 'messages' => $messages,
             ]);
 
-            $response->throw();
+            throw new \RuntimeException($errorMsg, $status);
         }
 
         return $response->json();
