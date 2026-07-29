@@ -453,18 +453,8 @@ new #[Layout('components.layouts.app')] class extends Component {
 
                     <!-- Embedded interactive audio recorder -->
                     <div x-data="audioRecorder()" class="mt-4">
-                        <!-- Tab navigation -->
-                        <div class="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
-                            <button type="button" @click="tab = 'record'" :class="tab === 'record' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-bold' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-3 border-b-2 text-center text-xs font-semibold transition-all">
-                                🎙️ Record Directly (Recommended)
-                            </button>
-                            <button type="button" @click="tab = 'upload'" :class="tab === 'upload' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-bold' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-3 border-b-2 text-center text-xs font-semibold transition-all">
-                                📁 Upload Audio File
-                            </button>
-                        </div>
-
-                        <!-- Record Tab -->
-                        <div x-show="tab === 'record'" class="flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-150 dark:border-zinc-900">
+                        <!-- Direct Voice Recording -->
+                        <div class="flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-150 dark:border-zinc-900">
                             <!-- Idle State -->
                             <div x-show="status === 'idle'" class="text-center">
                                 <button type="button" @click="startRecording" class="w-20 h-20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all duration-300">
@@ -510,37 +500,6 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     Re-record
                                 </button>
                             </div>
-                        </div>
-
-                        <!-- Upload Tab -->
-                        <div x-show="tab === 'upload'" class="p-8 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-150 dark:border-zinc-900" x-cloak>
-                            <div class="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl p-8 hover:border-indigo-500/50 transition-colors cursor-pointer relative"
-                                 @click="$refs.fileInput.click()">
-                                <svg class="w-10 h-10 text-zinc-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                </svg>
-                                <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 text-center">Click or Drag Audio File Here</p>
-                                <p class="text-[11px] text-zinc-500 mt-1">WAV, MP3, WEBM, or OGG (Max {{ config('apels.audio_max_mb', 10) }} MB)</p>
-                                
-                                <input
-                                    type="file"
-                                    x-ref="fileInput"
-                                    @change="handleFileUpload"
-                                    accept=".wav,.mp3,.webm,.ogg"
-                                    class="hidden"
-                                />
-                            </div>
-
-                            <template x-if="uploadedFileName">
-                                <div class="mt-4 p-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between text-xs">
-                                    <div class="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-                                        📁 <span x-text="uploadedFileName" class="font-semibold truncate max-w-xs"></span>
-                                    </div>
-                                    <button type="button" @click="removeUploadedFile" class="text-red-500 hover:text-red-700 font-bold">
-                                        Remove
-                                    </button>
-                                </div>
-                            </template>
                         </div>
 
                         <!-- Livewire Upload Progress Indicator -->

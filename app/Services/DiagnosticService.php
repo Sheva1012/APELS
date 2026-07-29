@@ -117,39 +117,9 @@ class DiagnosticService
             'answers'               => $input['answers'] ?? null,
         ]);
 
-        // 3. Dispatch async job or run sync (Req 4.3, 4.4)
+        // 3. Dispatch async job for speaking audio or run sync when no audio (Req 4.3, 4.4)
         if ($audioPath) {
-            // Process speaking evaluation synchronously
-            try {
-                $stt    = app(SpeechToTextService::class);
-                $result = $stt->analyze($audioPath);
-                $score      = $result['score'];
-                $transcript = $result['transcript'];
-            } catch (\Throwable $e) {
-                Log::error('DiagnosticService::process — STT failed', [
-                    'user_id' => $userId,
-                    'error'   => $e->getMessage(),
-                ]);
-                $score      = 0;
-                $transcript = '';
-            }
-
-            $diagnostic->update([
-                'speaking'               => $score,
-                'speaking_transcript'    => $transcript,
-                'is_speaking_processed'  => true,
-            ]);
-
-            $this->runEngineAndFeedback($userId, $diagnostic->fresh());
-
-            // Delete audio file
-            try {
-                if (\Illuminate\Support\Facades\Storage::disk('private')->exists($audioPath)) {
-                    \Illuminate\Support\Facades\Storage::disk('private')->delete($audioPath);
-                }
-            } catch (\Throwable $e) {
-                Log::error('DiagnosticService — audio deletion failed', ['error' => $e->getMessage()]);
-            }
+            ProcessSpeakingAudio::dispatch($userId, $audioPath, $diagnostic->id);
         } else {
             // No audio — run engine synchronously with speaking=0 (Req 4.4)
             $diagnostic->update(['is_speaking_processed' => true]);

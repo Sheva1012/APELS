@@ -50,22 +50,30 @@ class GroqService
 
         $model = config('groq.whisper_model', 'whisper-large-v3');
 
-        $response = Http::timeout($this->timeout)
-            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
-                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
-                    return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
-                }
-                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
-            }, throw: false)
-            ->withoutVerifying()
-            ->withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
-            ])
-            ->attach('file', file_get_contents($audioPath), basename($audioPath))
-            ->post($this->baseUrl . '/audio/transcriptions', [
-                'model'    => $model,
-                'language' => $language,
-            ]);
+        $stream = fopen($audioPath, 'r');
+
+        try {
+            $response = Http::timeout($this->timeout)
+                ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
+                    if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                        return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
+                    }
+                    return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                }, throw: false)
+                ->withoutVerifying()
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                ])
+                ->attach('file', $stream, basename($audioPath))
+                ->post($this->baseUrl . '/audio/transcriptions', [
+                    'model'    => $model,
+                    'language' => $language,
+                ]);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
 
         if ($response->failed()) {
             $status = $response->status();
