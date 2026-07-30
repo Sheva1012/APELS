@@ -23,21 +23,18 @@ class ListQuestions extends ListRecords
         return [
             Actions\CreateAction::make(),
 
-            // Import CSV/XLSX (Req 20.1-20.4)
+            // Import XLSX (Req 20.1-20.4)
             Actions\Action::make('import')
                 ->label('Import')
                 ->icon('heroicon-o-arrow-up-tray')
                 ->modalDescription(
-                    view('filament.partials.import-csv-hint')
+                    str('Download template Excel: <a href="'.asset('templates/question_import_template.xlsx').'" style="color: #3b82f6; text-decoration: underline; font-weight: bold;" download>question_import_template.xlsx</a>')
+                        ->toHtmlString()
                 )
                 ->form([
                     Forms\Components\FileUpload::make('file')
-                        ->label('CSV or XLSX File')
-                        ->acceptedFileTypes([
-                            'text/csv',
-                            'application/vnd.ms-excel',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        ])
+                        ->label('Excel File (.xlsx)')
+                        ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
                         ->required(),
                 ])
                 ->action(function (array $data): void {
@@ -54,9 +51,8 @@ class ListQuestions extends ListRecords
                         return;
                     }
 
-                    $content = file_get_contents($fullPath);
-                    $importer = app(CsvQuestionImporter::class);
-                    $result = $importer->parse($content);
+                    $importer = app(\App\Services\Excel\ExcelQuestionImporter::class);
+                    $result = $importer->parse($fullPath);
 
                     // Create valid records
                     $created = 0;

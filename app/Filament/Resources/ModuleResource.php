@@ -39,7 +39,7 @@ class ModuleResource extends Resource
                 ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])
                 ->required(),
             Forms\Components\Select::make('tag')
-                ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])->required(),
+                ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary'])->required(),
             Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
             Forms\Components\Toggle::make('is_active')->default(true),
         ]);

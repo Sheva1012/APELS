@@ -18,6 +18,7 @@
         "livewire/flux": "^2.0",
         "livewire/volt": "^1.6.7",
         "maatwebsite/excel": "^3.1",
+        "rap2hpoutre/fast-excel": "^5.14",
         "spatie/laravel-permission": "^7.4"
     },
     "require-dev": {

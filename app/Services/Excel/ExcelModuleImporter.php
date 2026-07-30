@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Services\Excel;
+
+use Rap2hpoutre\FastExcel\FastExcel;
+
+class ExcelModuleImporter
+{
+    private const VALID_LEVELS = ['basic', 'intermediate', 'advanced'];
+    private const VALID_TAGS = ['grammar', 'vocabulary'];
+
+    public function parse(string $filePath): array
+    {
+        $valid = [];
+        $errors = [];
+        $rowNumber = 1;
+
+        $collection = (new FastExcel)->import($filePath);
+
+        foreach ($collection as $record) {
+            $rowNumber++;
+            
+            $formattedRecord = [];
+            foreach ($record as $key => $value) {
+                $formattedRecord[strtolower(trim($key))] = $value;
+            }
+
+            $reasons = $this->validateRow($formattedRecord);
+
+            if (empty($reasons)) {
+                $lessons = [];
+                for ($i = 1; $i <= 10; $i++) {
+                    $lessonKey = "lesson_{$i}_title";
+                    if (!empty(trim($formattedRecord[$lessonKey] ?? ''))) {
+                        $lessons[] = [
+                            'title' => trim($formattedRecord[$lessonKey]),
+                            'type'  => 'text',
+                            'order_index' => $i
+                        ];
+                    }
+                }
+
+                $valid[] = [
+                    'module' => [
+                        'title'       => trim($formattedRecord['module_title'] ?? ''),
+                        'description' => trim($formattedRecord['module_description'] ?? ''),
+                        'path_key'    => trim($formattedRecord['path_key'] ?? ''),
+                        'level'       => strtolower(trim($formattedRecord['level'] ?? '')),
+                        'tag'         => strtolower(trim($formattedRecord['tag'] ?? '')),
+                        'is_active'   => true,
+                        'order_index' => (int) ($formattedRecord['order_index'] ?? 0),
+                    ],
+                    'lessons' => $lessons
+                ];
+            } else {
+                $errors[] = ['row' => $rowNumber, 'reasons' => $reasons];
+            }
+        }
+
+        return ['valid' => $valid, 'errors' => $errors];
+    }
+
+    private function validateRow(array $record): array
+    {
+        $reasons = [];
+
+        if (empty(trim($record['module_title'] ?? ''))) {
+            $reasons[] = "module_title wajib diisi";
+        }
+        if (empty(trim($record['path_key'] ?? ''))) {
+            $reasons[] = "path_key wajib diisi";
+        }
+
+        $level = strtolower(trim($record['level'] ?? ''));
+        if (!in_array($level, self::VALID_LEVELS, true)) {
+            $reasons[] = "level harus salah satu dari: basic, intermediate, advanced";
+        }
+
+        $tag = strtolower(trim($record['tag'] ?? ''));
+        if (!in_array($tag, self::VALID_TAGS, true)) {
+            $reasons[] = "tag harus salah satu dari: grammar, vocabulary";
+        }
+
+        return $reasons;
+    }
+}
