@@ -27,7 +27,11 @@ class AppServiceProvider extends ServiceProvider
                 });
 
                 if (isset($settings['GROQ_API_KEY'])) {
-                    config(['groq.api_key' => $settings['GROQ_API_KEY']]);
+                    $keyVal = $settings['GROQ_API_KEY'];
+                    // If decryption failed, $keyVal remains an encrypted JSON string starting with "eyJ"
+                    if (!str_starts_with($keyVal, 'eyJ')) {
+                        config(['groq.api_key' => $keyVal]);
+                    }
                 }
                 if (isset($settings['APELS_AUDIO_MAX_MB'])) {
                     config(['apels.audio_max_mb' => $settings['APELS_AUDIO_MAX_MB']]);

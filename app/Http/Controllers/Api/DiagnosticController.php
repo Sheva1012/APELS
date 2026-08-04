@@ -37,12 +37,14 @@ class DiagnosticController extends Controller
         $attemptNumber = $this->diagnosticService->nextAttemptNumber($userId);
 
         $grammarQs = Question::active()
+            ->whereNull('module_id')
             ->bySet($activeSet)
             ->byType('grammar')
             ->orderBy('difficulty')
             ->get(['id', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'tag', 'difficulty']);
 
         $vocabQs = Question::active()
+            ->whereNull('module_id')
             ->bySet($activeSet)
             ->byType('vocabulary')
             ->orderBy('difficulty')

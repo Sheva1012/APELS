@@ -146,8 +146,9 @@ new #[Layout('components.layouts.app')] class extends Component {
         $this->errorMessage = null;
 
         // Validate audio
+        $maxSize = max(10, (int) config('apels.audio_max_mb', 10)) * 1024;
         $this->validate([
-            'audioFile' => ['required', 'file', 'mimes:wav,mp3,webm,ogg', 'max:' . (config('apels.audio_max_mb', 10) * 1024)],
+            'audioFile' => ['required', 'file', 'mimes:wav,mp3,webm,ogg', 'max:' . $maxSize],
         ]);
 
         try {
