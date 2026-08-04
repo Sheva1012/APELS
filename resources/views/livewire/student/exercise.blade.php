@@ -240,25 +240,25 @@ new #[Layout('components.layouts.app')] class extends Component {
             
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
                 @if($mcScore !== null)
-                    <div class="p-3 bg-gray-50 dark:bg-zinc-800 rounded-lg border border-gray-100 dark:border-zinc-700">
-                        <span class="text-xs text-gray-500 dark:text-zinc-400 block">Multiple Choice Score</span>
-                        <span class="text-lg font-bold text-zinc-800 dark:text-zinc-200">{{ $mcScore }}%</span>
+                    <div class="p-4 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400 block font-medium">Multiple Choice Score</span>
+                        <span class="text-xl font-bold text-zinc-900 dark:text-zinc-100">{{ $mcScore }}%</span>
                     </div>
                 @endif
                 @if($aiWritingScore !== null)
-                    <div class="p-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-lg border border-indigo-100 dark:border-indigo-800">
-                        <span class="text-xs text-indigo-600 dark:text-indigo-400 block">AI Writing Score</span>
-                        <span class="text-lg font-bold text-indigo-700 dark:text-indigo-300">{{ $aiWritingScore }}%</span>
+                    <div class="p-4 bg-indigo-50/70 dark:bg-zinc-800/80 rounded-xl border border-indigo-200 dark:border-zinc-700">
+                        <span class="text-xs text-indigo-600 dark:text-indigo-400 block font-semibold">AI Writing Score</span>
+                        <span class="text-xl font-bold text-indigo-700 dark:text-indigo-300">{{ $aiWritingScore }}%</span>
                     </div>
                 @endif
             </div>
 
             @if($aiWritingFeedback)
-                <div class="mt-4 p-4 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800">
-                    <h3 class="font-bold text-indigo-900 dark:text-indigo-300 mb-1 flex items-center gap-2 text-sm">
+                <div class="mt-4 p-4 rounded-xl bg-indigo-50/50 dark:bg-zinc-950/90 border border-indigo-200 dark:border-zinc-800">
+                    <h3 class="font-bold text-indigo-900 dark:text-indigo-400 mb-1.5 flex items-center gap-2 text-sm">
                         <span>🤖</span> AI Groq Evaluation &amp; Feedback:
                     </h3>
-                    <p class="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-line">{{ $aiWritingFeedback }}</p>
+                    <p class="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-line">{{ $aiWritingFeedback }}</p>
                 </div>
             @endif
 
