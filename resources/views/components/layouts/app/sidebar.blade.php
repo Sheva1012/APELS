@@ -54,7 +54,7 @@
         
         html.dark .custom-sidebar,
         html.dark [data-flux-sidebar] {
-            background-color: #0a192f !important; /* Navy Dark Blue for Dark Mode */
+            background-color: #0b132b !important; /* Deep Navy Dark Blue for Dark Mode */
             color: #ffffff !important;
             border-right: none !important;
         }
@@ -70,7 +70,7 @@
             color: #0f172a !important;
         }
     </style>
-    <body class="min-h-screen w-full bg-slate-100/70 dark:bg-zinc-900" 
+    <body class="min-h-screen w-full bg-[#f1f5f9] dark:bg-[#0f172a] text-slate-800 dark:text-slate-100" 
           x-data="{ minimized: window.innerWidth >= 1024 ? (localStorage.getItem('apels-sidebar-minimized') === 'true') : false }" 
           @resize.window="if (window.innerWidth < 1024) minimized = false; else minimized = (localStorage.getItem('apels-sidebar-minimized') === 'true')"
           :data-sidebar-minimized="minimized">
