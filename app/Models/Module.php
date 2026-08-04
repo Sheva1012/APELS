@@ -34,6 +34,8 @@ class Module extends Model
         'tag',
         'order_index',
         'is_active',
+        'writing_prompt',
+        'ai_evaluation_parameters'
     ];
 
     protected $casts = [
@@ -46,9 +48,14 @@ class Module extends Model
      *
      * @return HasMany<Lesson, $this>
      */
-    public function lessons(): HasMany
+    public function lessons()
     {
         return $this->hasMany(Lesson::class)->orderBy('order_index');
+    }
+
+    public function questions()
+    {
+        return $this->hasMany(Question::class);
     }
 
     /**

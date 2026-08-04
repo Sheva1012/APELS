@@ -16,6 +16,7 @@ class Question extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'module_id',
         'set',
         'question',
         'option_a',
@@ -28,6 +29,11 @@ class Question extends Model
         'difficulty',
         'is_active',
     ];
+
+    public function module()
+    {
+        return $this->belongsTo(Module::class);
+    }
 
     /**
      * The attributes that should be cast.
