@@ -22,7 +22,10 @@ class ExcelModuleImporter
             
             $formattedRecord = [];
             foreach ($record as $key => $value) {
-                $formattedRecord[strtolower(trim($key))] = $value;
+                // Normalize "Lesson 1 Title" to "lesson_1_title"
+                $normalizedKey = strtolower(trim($key));
+                $normalizedKey = str_replace([' ', '-'], '_', $normalizedKey);
+                $formattedRecord[$normalizedKey] = $value;
             }
 
             $reasons = $this->validateRow($formattedRecord);
@@ -31,11 +34,33 @@ class ExcelModuleImporter
                 $lessons = [];
                 for ($i = 1; $i <= 10; $i++) {
                     $lessonKey = "lesson_{$i}_title";
+                    $contentKey = "lesson_{$i}_content";
                     if (!empty(trim($formattedRecord[$lessonKey] ?? ''))) {
                         $lessons[] = [
                             'title' => trim($formattedRecord[$lessonKey]),
+                            'content' => trim($formattedRecord[$contentKey] ?? ''),
                             'type'  => 'text',
                             'order_index' => $i
+                        ];
+                    }
+                }
+
+                $questions = [];
+                for ($i = 1; $i <= 5; $i++) {
+                    $qKey = "q{$i}_question";
+                    if (!empty(trim($formattedRecord[$qKey] ?? ''))) {
+                        $questions[] = [
+                            'question' => trim($formattedRecord[$qKey]),
+                            'option_a' => trim($formattedRecord["q{$i}_opt_a"] ?? ''),
+                            'option_b' => trim($formattedRecord["q{$i}_opt_b"] ?? ''),
+                            'option_c' => trim($formattedRecord["q{$i}_opt_c"] ?? ''),
+                            'option_d' => trim($formattedRecord["q{$i}_opt_d"] ?? ''),
+                            'correct_answer' => strtolower(trim($formattedRecord["q{$i}_correct"] ?? 'a')),
+                            'difficulty' => 3,
+                            'type' => strtolower(trim($formattedRecord['tag'] ?? 'grammar')),
+                            'tag' => strtolower(trim($formattedRecord['level'] ?? 'basic')),
+                            'is_active' => true,
+                            'set' => 'A'
                         ];
                     }
                 }
@@ -49,8 +74,11 @@ class ExcelModuleImporter
                         'tag'         => strtolower(trim($formattedRecord['tag'] ?? '')),
                         'is_active'   => true,
                         'order_index' => (int) ($formattedRecord['order_index'] ?? 0),
+                        'writing_prompt' => trim($formattedRecord['writing_prompt'] ?? ''),
+                        'ai_evaluation_parameters' => trim($formattedRecord['ai_evaluation_parameters'] ?? ''),
                     ],
-                    'lessons' => $lessons
+                    'lessons' => $lessons,
+                    'questions' => $questions
                 ];
             } else {
                 $errors[] = ['row' => $rowNumber, 'reasons' => $reasons];

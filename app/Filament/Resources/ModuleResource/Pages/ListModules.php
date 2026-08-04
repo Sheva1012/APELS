@@ -50,6 +50,7 @@ class ListModules extends ListRecords
                     foreach ($result['valid'] as $item) {
                         $moduleData = $item['module'];
                         $lessonsData = $item['lessons'];
+                        $questionsData = $item['questions'] ?? [];
 
                         // Create module
                         $module = \App\Models\Module::create($moduleData);
@@ -57,6 +58,11 @@ class ListModules extends ListRecords
                         // Create skeleton lessons
                         foreach ($lessonsData as $lesson) {
                             $module->lessons()->create($lesson);
+                        }
+
+                        // Create skeleton questions
+                        foreach ($questionsData as $question) {
+                            $module->questions()->create($question);
                         }
                         
                         $created++;
