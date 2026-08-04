@@ -16,9 +16,9 @@ class LessonsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Forms\Components\TextInput::make('title')
+                Forms\Components\Textarea::make('title')
                     ->required()
-                    ->maxLength(255),
+                    ->rows(3),
                 Forms\Components\Select::make('type')
                     ->options([
                         'text' => 'Text',
@@ -59,11 +59,12 @@ class LessonsRelationManager extends RelationManager
             ->headerActions([
                 \Filament\Actions\CreateAction::make(),
             ])
-            ->actions([
+            ->recordActions([
+                \Filament\Actions\ViewAction::make(),
                 \Filament\Actions\EditAction::make(),
                 \Filament\Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
+            ->toolbarActions([
                 \Filament\Actions\BulkActionGroup::make([
                     \Filament\Actions\DeleteBulkAction::make(),
                 ]),

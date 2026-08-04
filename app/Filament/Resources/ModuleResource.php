@@ -31,17 +31,35 @@ class ModuleResource extends Resource
         ));
 
         return $schema->components([
-            Forms\Components\TextInput::make('title')->required()->maxLength(255),
-            Forms\Components\Textarea::make('description')->maxLength(5000)->rows(3),
-            Forms\Components\Select::make('path_key')->label('Learning Path')
-                ->options($pathOptions)->required()->searchable(),
-            Forms\Components\Select::make('level')
-                ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])
-                ->required(),
-            Forms\Components\Select::make('tag')
-                ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary'])->required(),
-            Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
-            Forms\Components\Toggle::make('is_active')->default(true),
+            \Filament\Schemas\Components\Tabs::make('Module Builder')->tabs([
+                \Filament\Schemas\Components\Tabs\Tab::make('Module Info')
+                    ->icon('heroicon-o-information-circle')
+                    ->schema([
+                        Forms\Components\TextInput::make('title')->required()->maxLength(255),
+                        Forms\Components\Textarea::make('description')->maxLength(5000)->rows(3),
+                        Forms\Components\Select::make('path_key')->label('Learning Path')
+                            ->options($pathOptions)->required()->searchable(),
+                        Forms\Components\Select::make('level')
+                            ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced'])
+                            ->required(),
+                        Forms\Components\Select::make('tag')
+                            ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary'])->required(),
+                        Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
+                        Forms\Components\Toggle::make('is_active')->default(true),
+                    ])->columns(2),
+                \Filament\Schemas\Components\Tabs\Tab::make('AI Open Prompt')
+                    ->icon('heroicon-o-sparkles')
+                    ->schema([
+                        Forms\Components\Textarea::make('writing_prompt')
+                            ->label('Writing Task Prompt (Instruction for Student)')
+                            ->rows(4)->columnSpanFull()
+                            ->placeholder('e.g., Write a short email (40–60 words) to the finance department...'),
+                        Forms\Components\Textarea::make('ai_evaluation_parameters')
+                            ->label('AI Evaluation Parameters')
+                            ->rows(4)->columnSpanFull()
+                            ->placeholder('e.g., Salutation check, inquiry phrases, Grammar & Spelling'),
+                    ]),
+            ])->columnSpanFull()
         ]);
     }
 
@@ -71,6 +89,7 @@ class ModuleResource extends Resource
     {
         return [
             RelationManagers\LessonsRelationManager::class,
+            RelationManagers\QuestionsRelationManager::class,
         ];
     }
 
