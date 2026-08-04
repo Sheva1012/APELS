@@ -80,25 +80,10 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
         $currentModuleLessons = $this->lesson->module->lessons()->where('is_active', true)->orderBy('order_index')->get();
         $isLastLessonInModule = $currentModuleLessons->last()->id === $this->lesson->id;
 
+        // If last lesson in module, redirect to quiz/exercise page
         if ($isLastLessonInModule) {
-            // Mark the module as completed since there are no exercises
-            \App\Models\UserModuleProgress::updateOrCreate(
-                ['user_id' => auth()->id(), 'module_id' => $this->lesson->module_id],
-                ['is_completed' => true, 'score' => 100]
-            );
-            
-            // Buka kunci modul selanjutnya secara otomatis
-            $nextModule = \App\Models\Module::where('path_key', $this->lesson->module->path_key)
-                ->where('order_index', '>', $this->lesson->module->order_index)
-                ->orderBy('order_index')
-                ->first();
-                
-            if ($nextModule) {
-                \App\Models\UserModuleProgress::firstOrCreate(
-                    ['user_id' => auth()->id(), 'module_id' => $nextModule->id],
-                    ['is_unlocked' => true]
-                );
-            }
+            $this->redirect(route('exercises', $this->lesson->module_id), navigate: true);
+            return;
         }
 
         if ($currentIndex !== false && $currentIndex < $allLessons->count() - 1) {
@@ -108,6 +93,21 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
             // End of learning path
             $this->redirect(route('learning-path'), navigate: true);
         }
+    }
+
+    public function markCompleteAndGoToQuiz()
+    {
+        // Mark current lesson complete
+        UserLessonProgress::firstOrCreate([
+            'user_id' => auth()->id(),
+            'lesson_id' => $this->lesson->id,
+        ], [
+            'completed_at' => now(),
+        ]);
+
+        // Instead of unlocking next module here, we just go to the quiz
+        // The quiz completion will unlock the next module.
+        $this->redirect(route('exercises', $this->lesson->module_id), navigate: true);
     }
     
     public function goToPrevious()
@@ -151,8 +151,29 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
                 
                 <h1 class="text-3xl font-bold mb-6 text-zinc-900 dark:text-white leading-tight">{{ $lesson->title }}</h1>
                 
-                <div class="prose prose-zinc max-w-none dark:prose-invert prose-p:leading-relaxed prose-headings:font-bold prose-a:text-indigo-600 prose-img:rounded-xl">
-                    {!! $lesson->content !!}
+                <style>
+                    .lesson-content p {
+                        margin-bottom: 1.25rem !important;
+                    }
+                    .lesson-content p:last-child {
+                        margin-bottom: 0 !important;
+                    }
+                    .lesson-content ul {
+                        list-style-type: disc !important;
+                        padding-left: 1.5rem !important;
+                        margin-bottom: 1.25rem !important;
+                    }
+                    .lesson-content ol {
+                        list-style-type: decimal !important;
+                        padding-left: 1.5rem !important;
+                        margin-bottom: 1.25rem !important;
+                    }
+                    .lesson-content li {
+                        margin-bottom: 0.5rem !important;
+                    }
+                </style>
+                <div class="lesson-content prose prose-zinc max-w-none dark:prose-invert text-zinc-900 dark:text-white leading-relaxed">
+                    {!! nl2br($lesson->content) !!}
                 </div>
             </div>
         </main>
@@ -164,6 +185,9 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
                 $currentIndex = $allLessons->search(fn($l) => $l->id === $lesson->id);
                 $hasPrev = $currentIndex !== false && $currentIndex > 0;
                 $hasNext = $currentIndex !== false && $currentIndex < $allLessons->count() - 1;
+                
+                $currentModuleLessons = $lesson->module->lessons()->where('is_active', true)->orderBy('order_index')->get();
+                $isLastLessonInModule = $currentModuleLessons->isNotEmpty() && $currentModuleLessons->last()->id === $lesson->id;
             @endphp
             
             <div class="flex-1 flex justify-start">
@@ -183,7 +207,13 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
             </div>
 
             <div class="flex-1 flex justify-end">
-                @if($hasNext)
+                @if($isLastLessonInModule)
+                    <button wire:click="markCompleteAndGoToQuiz" class="flex items-center gap-2 text-[13px] font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition group">
+                        <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">Mulai Quiz Modul</span>
+                        <span class="sm:hidden">Quiz</span>
+                        <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                @elseif($hasNext)
                     <button wire:click="markCompleteAndNext" class="flex items-center gap-2 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition group">
                         <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">{{ $allLessons[$currentIndex + 1]->title }}</span>
                         <span class="sm:hidden">Selanjutnya</span>
@@ -287,6 +317,42 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
                                         </a>
                                     </li>
                                 @endforeach
+                                <!-- Quiz & Writing Task Step -->
+                                <li>
+                                    @if($allModComplete)
+                                        <a href="{{ route('exercises', $mod->id) }}" wire:navigate class="flex items-start py-2 px-6 hover:bg-black/5 dark:hover:bg-white/5 transition-colors border-r-2 border-transparent">
+                                            <div class="mt-[3px] flex-shrink-0 w-6 flex justify-start">
+                                                @php
+                                                    $modProgress = \App\Models\UserModuleProgress::where('user_id', auth()->id())->where('module_id', $mod->id)->first();
+                                                    $isModCompleted = $modProgress && $modProgress->is_completed;
+                                                @endphp
+                                                @if($isModCompleted)
+                                                    <svg class="w-4 h-4 text-emerald-500 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                                                    </svg>
+                                                @else
+                                                    <svg class="w-4 h-4 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                      <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.492-3.053c.24-.294.59-.444.954-.444H18.75m-7.33-6.52l3.181 3.183m3.181-3.183l-3.181 3.183m-3.181-3.183c-.845-.845-2.222-.845-3.067 0l-3.181 3.183c-.845.845-.845 2.222 0 3.067l3.181 3.183c.845.845 2.222.845 3.067 0l3.181-3.183c.845-.845.845-2.222 0-3.067z" />
+                                                    </svg>
+                                                @endif
+                                            </div>
+                                            <span class="text-[12px] leading-relaxed flex-1 text-zinc-600 dark:text-zinc-400 font-bold">
+                                                Adaptive Quiz & Task
+                                            </span>
+                                        </a>
+                                    @else
+                                        <div class="flex items-start py-2 px-6 transition-colors border-r-2 border-transparent opacity-50 cursor-not-allowed">
+                                            <div class="mt-[3px] flex-shrink-0 w-6 flex justify-start">
+                                                <svg class="w-4 h-4 text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                                </svg>
+                                            </div>
+                                            <span class="text-[12px] leading-relaxed flex-1 text-zinc-500 dark:text-zinc-500 font-medium">
+                                                Adaptive Quiz & Task
+                                            </span>
+                                        </div>
+                                    @endif
+                                </li>
                             </ul>
                         </div>
                     </div>

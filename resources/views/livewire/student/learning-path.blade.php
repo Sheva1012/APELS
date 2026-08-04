@@ -52,24 +52,6 @@ new #[Layout('components.layouts.app')] class extends Component {
             $completedLessons = $moduleLessons->where('is_active', true)->whereIn('id', $completedLessonIds)->count();
 
             $progressPercent = $totalLessons > 0 ? (int) round(($completedLessons / $totalLessons) * 100) : 0;
-            
-            // Auto-complete module if all lessons are done (retroactive fix)
-            if ($progressPercent === 100 && !$mp->is_completed) {
-                $mp->update(['is_completed' => true, 'score' => 100]);
-                $mp->is_completed = true;
-                
-                $nextModule = \App\Models\Module::where('path_key', $mp->module->path_key)
-                    ->where('order_index', '>', $mp->module->order_index)
-                    ->orderBy('order_index')
-                    ->first();
-                    
-                if ($nextModule) {
-                    \App\Models\UserModuleProgress::firstOrCreate(
-                        ['user_id' => $userId, 'module_id' => $nextModule->id],
-                        ['is_unlocked' => true]
-                    );
-                }
-            }
 
             return [
                 'id'           => $mp->module_id,
