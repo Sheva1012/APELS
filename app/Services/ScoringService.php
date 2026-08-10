@@ -51,12 +51,39 @@ class ScoringService
         $total  = $questions->sum(fn($q) => is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty);
 
         foreach ($questions as $q) {
-            $qId     = is_array($q) ? $q['id'] : $q->id;
-            $correct = is_array($q) ? ($q['correct_answer'] ?? '') : $q->correct_answer;
-            $given   = $answers[$qId] ?? null;
+            $qId        = is_array($q) ? $q['id'] : $q->id;
+            $qType      = is_array($q) ? ($q['question_type'] ?? 'multiple_choice') : ($q->question_type ?? 'multiple_choice');
+            $difficulty = is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty;
+            $given      = $answers[$qId] ?? null;
+            $isCorrect  = false;
 
-            if ($given !== null && strtolower($given) === strtolower($correct)) {
-                $difficulty = is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty;
+            if ($given !== null) {
+                if ($qType === 'multiple_choice') {
+                    $correct = is_array($q) ? ($q['correct_answer'] ?? '') : $q->correct_answer;
+                    if (is_string($given) && strtolower(trim($given)) === strtolower(trim($correct))) {
+                        $isCorrect = true;
+                    }
+                } elseif ($qType === 'short_answer') {
+                    $ansJson = is_array($q) ? ($q['answer_json'] ?? []) : ($q->answer_json ?? []);
+                    $acceptable = is_array($ansJson) ? ($ansJson['acceptable_answers'] ?? []) : [];
+                    $givenStr = strtolower(trim((string)$given));
+                    foreach ($acceptable as $acc) {
+                        if (strtolower(trim((string)$acc)) === $givenStr) {
+                            $isCorrect = true;
+                            break;
+                        }
+                    }
+                } elseif ($qType === 'matching' || $qType === 'ordering') {
+                    $ansJson = is_array($q) ? ($q['answer_json'] ?? []) : ($q->answer_json ?? []);
+                    if (is_array($given) && is_array($ansJson)) {
+                        if ($given === $ansJson) {
+                            $isCorrect = true;
+                        }
+                    }
+                }
+            }
+
+            if ($isCorrect) {
                 $earned += $difficulty;
             }
         }

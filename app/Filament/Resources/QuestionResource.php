@@ -36,6 +36,7 @@ class QuestionResource extends Resource
             Forms\Components\TextInput::make('option_d')->label('Option D')->required()->maxLength(1000),
             Forms\Components\Select::make('correct_answer')
                 ->options(['a'=>'A','b'=>'B','c'=>'C','d'=>'D'])->required(),
+            Forms\Components\Hidden::make('question_type')->default('multiple_choice'),
             Forms\Components\Select::make('type')
                 ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary'])->required(),
             Forms\Components\Select::make('tag')

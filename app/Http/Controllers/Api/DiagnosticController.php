@@ -41,14 +41,14 @@ class DiagnosticController extends Controller
             ->bySet($activeSet)
             ->byType('grammar')
             ->orderBy('difficulty')
-            ->get(['id', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'tag', 'difficulty']);
+            ->get(['id', 'question', 'question_type', 'option_a', 'option_b', 'option_c', 'option_d', 'options_json', 'tag', 'difficulty']);
 
         $vocabQs = Question::active()
             ->whereNull('module_id')
             ->bySet($activeSet)
             ->byType('vocabulary')
             ->orderBy('difficulty')
-            ->get(['id', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'tag', 'difficulty']);
+            ->get(['id', 'question', 'question_type', 'option_a', 'option_b', 'option_c', 'option_d', 'options_json', 'tag', 'difficulty']);
 
         return ApiResponse::success('Diagnostic session started', [
             'set'               => $activeSet,

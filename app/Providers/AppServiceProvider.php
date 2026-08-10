@@ -16,9 +16,15 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Bootstrap any application services.
-     */
+     */ 
     public function boot(): void
     {
+        // Fallback for Filament HTML Sanitizer on PHP < 8.4 / Shared hosting (InfinityFree)
+        // Prevents: Class "Dom\HTMLDocument" not found
+        \Illuminate\Support\Str::macro('sanitizeHtml', function (string $html): string {
+            return strip_tags($html, '<b><i><strong><em><a><ul><ol><li><p><br><span><div><small><sub><sup>');
+        });
+
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
                 // Cache settings for 1 hour to prevent DB query on every request

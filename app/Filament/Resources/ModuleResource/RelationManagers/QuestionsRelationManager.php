@@ -25,13 +25,57 @@ class QuestionsRelationManager extends RelationManager
         return $schema
             ->components([
                 \Filament\Forms\Components\Textarea::make('question')->required()->rows(3)->columnSpanFull(),
-                \Filament\Forms\Components\TextInput::make('option_a')->required(),
-                \Filament\Forms\Components\TextInput::make('option_b')->required(),
-                \Filament\Forms\Components\TextInput::make('option_c')->required(),
-                \Filament\Forms\Components\TextInput::make('option_d')->required(),
+                \Filament\Forms\Components\Select::make('question_type')
+                    ->label('Tipe Soal')
+                    ->options([
+                        'multiple_choice' => 'Pilihan Ganda',
+                        'short_answer' => 'Isian Singkat',
+                        'matching' => 'Menjodohkan',
+                        'ordering' => 'Mengurutkan',
+                    ])
+                    ->default('multiple_choice')
+                    ->reactive()
+                    ->required(),
+
+                \Filament\Forms\Components\TextInput::make('option_a')->label('Option A')->maxLength(1000)
+                    ->visible(fn ($get) => $get('question_type') === 'multiple_choice' || !$get('question_type')),
+                \Filament\Forms\Components\TextInput::make('option_b')->label('Option B')->maxLength(1000)
+                    ->visible(fn ($get) => $get('question_type') === 'multiple_choice' || !$get('question_type')),
+                \Filament\Forms\Components\TextInput::make('option_c')->label('Option C')->maxLength(1000)
+                    ->visible(fn ($get) => $get('question_type') === 'multiple_choice' || !$get('question_type')),
+                \Filament\Forms\Components\TextInput::make('option_d')->label('Option D')->maxLength(1000)
+                    ->visible(fn ($get) => $get('question_type') === 'multiple_choice' || !$get('question_type')),
                 \Filament\Forms\Components\Select::make('correct_answer')
                     ->options(['a' => 'A', 'b' => 'B', 'c' => 'C', 'd' => 'D'])
-                    ->required(),
+                    ->visible(fn ($get) => $get('question_type') === 'multiple_choice' || !$get('question_type')),
+
+                \Filament\Forms\Components\Repeater::make('answer_json.acceptable_answers')
+                    ->label('Jawaban yang Dibenarkan (Isian Singkat)')
+                    ->schema([
+                        \Filament\Forms\Components\TextInput::make('answer')->label('Jawaban')->required(),
+                    ])
+                    ->visible(fn ($get) => $get('question_type') === 'short_answer'),
+
+                \Filament\Forms\Components\Repeater::make('options_json.pairs')
+                    ->label('Pasangan (Kiri - Kanan)')
+                    ->schema([
+                        \Filament\Forms\Components\TextInput::make('left')->label('Item Kiri')->required(),
+                        \Filament\Forms\Components\TextInput::make('right')->label('Item Kanan')->required(),
+                    ])
+                    ->visible(fn ($get) => $get('question_type') === 'matching'),
+                    
+                \Filament\Forms\Components\Repeater::make('options_json.items')
+                    ->label('Item (Untuk Diurutkan)')
+                    ->schema([
+                        \Filament\Forms\Components\TextInput::make('item')->label('Potongan Kalimat/Item')->required(),
+                    ])
+                    ->visible(fn ($get) => $get('question_type') === 'ordering'),
+                \Filament\Forms\Components\Repeater::make('answer_json.correct_sequence')
+                    ->label('Urutan Benar')
+                    ->schema([
+                        \Filament\Forms\Components\TextInput::make('item')->label('Isi berurutan')->required(),
+                    ])
+                    ->visible(fn ($get) => $get('question_type') === 'ordering'),
                 \Filament\Forms\Components\Hidden::make('type')->default('grammar'),
                 \Filament\Forms\Components\Hidden::make('tag')->default('basic'),
                 \Filament\Forms\Components\Hidden::make('set')->default('A'),

@@ -18,12 +18,15 @@ class Question extends Model
     protected $fillable = [
         'module_id',
         'set',
+        'question_type', // added
         'question',
         'option_a',
         'option_b',
         'option_c',
         'option_d',
+        'options_json', // added
         'correct_answer',
+        'answer_json', // added
         'type',
         'tag',
         'difficulty',
@@ -43,6 +46,8 @@ class Question extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'difficulty' => 'integer',
+        'options_json' => 'array',
+        'answer_json' => 'array',
     ];
 
     /**
