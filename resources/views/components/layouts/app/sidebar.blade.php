@@ -81,20 +81,20 @@
             <!-- Logo Section & Toggle -->
             <div class="mt-4 mb-4 w-full">
                 <!-- Expanded view (Logo + Toggle) -->
-                <div class="flex items-start w-full justify-between px-4" x-show="!minimized">
-                    <a href="{{ route('home') }}" class="flex flex-col flex-1" wire:navigate>
-                        <div class="flex items-center space-x-2 mb-1">
+                <div class="flex items-center justify-center relative w-full px-4" x-show="!minimized">
+                    <a href="{{ route('home') }}" class="flex flex-col items-center justify-center text-center" wire:navigate>
+                        <div class="flex items-center justify-center mb-1">
                             <x-app-logo class="size-7 text-blue-600 dark:text-blue-500"></x-app-logo>
                         </div>
-                        <div class="text-[10px] text-slate-500 dark:text-blue-200/70 font-medium tracking-wide leading-tight mt-1 text-left">
+                        <div class="text-[10px] text-slate-500 dark:text-blue-200/70 font-medium tracking-wide leading-tight mt-1 text-center">
                             AI-Powered English<br>Learning System
                         </div>
                     </a>
                     
                     <!-- Toggle Button (Hamburger) -->
                     <button @click="minimized = !minimized; localStorage.setItem('apels-sidebar-minimized', minimized)" 
-                            class="hidden lg:flex items-center justify-center text-slate-400 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white transition-colors mt-1 shrink-0 ml-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            class="hidden lg:flex items-center justify-center text-slate-400 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white transition-colors absolute right-3 top-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
                 </div>
 
@@ -160,9 +160,11 @@
             <flux:spacer />
 
             <!-- User Profile Card -->
-            <div class="px-3 mt-4 mb-3 w-full">
-                <a href="{{ route('settings.profile') }}" wire:navigate class="bg-slate-200/70 hover:bg-slate-200 border border-slate-300/60 text-slate-800 shadow-xs dark:bg-[#0f2444] dark:hover:bg-[#1e3a8a]/30 dark:border-[#1e3a8a]/50 dark:text-white dark:shadow-lg rounded-2xl flex items-center group cursor-pointer p-3 space-x-3 w-full" :class="{'justify-center p-2 w-full': minimized, 'p-3 space-x-3 w-full': !minimized}">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 dark:bg-[#1e3a8a] group-hover:bg-blue-700 dark:group-hover:bg-[#1e3a8a]/80 transition-colors flex items-center justify-center shrink-0 border border-blue-400/30">
+            <div class="px-3 mt-4 mb-3 w-full flex justify-center">
+                <a href="{{ route('settings.profile') }}" wire:navigate 
+                   class="flex items-center group cursor-pointer text-slate-800 dark:text-white transition-all duration-200" 
+                   :class="minimized ? 'w-10 h-10 rounded-full p-0 bg-transparent border-0 shadow-none justify-center' : 'w-full p-3 rounded-2xl space-x-3 bg-slate-200/70 hover:bg-slate-200 border border-slate-300/60 shadow-xs dark:bg-[#0f2444] dark:hover:bg-[#1e3a8a]/30 dark:border-[#1e3a8a]/50 dark:shadow-lg'">
+                    <div class="w-10 h-10 rounded-full bg-blue-600 dark:bg-[#1e3a8a] group-hover:bg-blue-700 dark:group-hover:bg-blue-600 transition-colors flex items-center justify-center shrink-0 border border-blue-400/30 shadow-sm">
                         <x-heroicon-s-user class="w-5 h-5 text-white" />
                     </div>
                     <div class="flex flex-col overflow-hidden" x-show="!minimized">
@@ -193,9 +195,9 @@
                     </div>
                     
                     <!-- Toggle pill -->
-                    <div x-show="!minimized" class="relative w-10 h-5 rounded-full transition-colors duration-300 bg-blue-600"
+                    <div x-show="!minimized" class="relative w-10 h-5 rounded-full transition-colors duration-300"
                          :class="isDark ? 'bg-blue-600' : 'bg-amber-400'">
-                        <div class="absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-300 translate-x-[20px]"
+                        <div class="absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-300"
                              :class="isDark ? 'translate-x-[20px]' : 'translate-x-[2px]'"></div>
                     </div>
                 </button>

@@ -671,7 +671,6 @@ new #[Layout('components.layouts.app')] class extends Component {
                     
                     <div class="relative z-10">
                         <div class="flex items-center gap-2 mb-4">
-                            <span class="text-xl">🚀</span>
                             <h2 class="text-base font-bold text-zinc-800 dark:text-white tracking-wide">Industry Readiness</h2>
                         </div>
 

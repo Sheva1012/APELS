@@ -332,7 +332,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                             <div x-show="page === Math.ceil({{ $qi + 1 }} / perPage)" class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
                                 <div class="mb-1">
                                     <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Question {{ $qi + 1 }} (Grammar)</span>
-                                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                    <div class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed [&>p]:inline [&_strong]:font-bold [&_strong]:text-indigo-600 dark:[&_strong]:text-indigo-400 [&_b]:font-bold [&_b]:text-indigo-600 dark:[&_b]:text-indigo-400 [&_u]:underline">{!! $q['question'] !!}</div>
                                     <div class="mt-4 space-y-2">
                                         @foreach ($shuffledOptions[$qId] ?? ['a','b','c','d'] as $opt)
                                             <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200
@@ -394,7 +394,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                             <div x-show="page === Math.ceil({{ $qi + 1 }} / perPage)" class="p-4 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl relative transition-all hover:border-indigo-500/20">
                                 <div class="mb-1">
                                     <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Question {{ $qi + 1 }} (Vocabulary)</span>
-                                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">{{ $q['question'] }}</p>
+                                    <div class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed [&>p]:inline [&_strong]:font-bold [&_strong]:text-indigo-600 dark:[&_strong]:text-indigo-400 [&_b]:font-bold [&_b]:text-indigo-600 dark:[&_b]:text-indigo-400 [&_u]:underline">{!! $q['question'] !!}</div>
                                     <div class="mt-4 space-y-2">
                                         @foreach ($shuffledOptions[$qId] ?? ['a','b','c','d'] as $opt)
                                             <label class="flex items-center gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50 cursor-pointer transition-all duration-200

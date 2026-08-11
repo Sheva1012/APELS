@@ -5,11 +5,7 @@ namespace App\Jobs;
 use App\Models\DiagnosticResult;
 use App\Services\DiagnosticService;
 use App\Services\SpeechToTextService;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -25,9 +21,9 @@ use Illuminate\Support\Facades\Storage;
  * Retry: max 3 attempts, 5s backoff (Req 6.8)
  * Failed: set speaking=0, is_speaking_processed=true, delete audio, log (Req 6.9, 23.3)
  */
-class ProcessSpeakingAudio implements ShouldQueue
+class ProcessSpeakingAudio
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
 
     public int $tries = 3;
     public int $backoff = 5;

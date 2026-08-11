@@ -78,6 +78,18 @@
     ::file-selector-button {
         border-color: var(--color-gray-200, currentColor);
     }
+    
+    b, strong {
+        font-weight: 700;
+    }
+    
+    em, i {
+        font-style: italic;
+    }
+    
+    u {
+        text-decoration-line: underline;
+    }
 }
 
 [data-flux-field] {

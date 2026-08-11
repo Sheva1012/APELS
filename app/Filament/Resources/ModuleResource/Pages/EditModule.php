@@ -12,6 +12,13 @@ class EditModule extends EditRecord
 
     protected function getHeaderActions(): array
     {
-        return [Actions\DeleteAction::make()];
+        return [
+            Actions\Action::make('back')
+                ->label('Kembali')
+                ->icon('heroicon-o-arrow-left')
+                ->url(static::getResource()::getUrl('index'))
+                ->color('gray'),
+            Actions\DeleteAction::make(),
+        ];
     }
 }
