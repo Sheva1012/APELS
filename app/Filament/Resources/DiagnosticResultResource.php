@@ -4,11 +4,15 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\DiagnosticResultResource\Pages;
 use App\Models\DiagnosticResult;
+use App\Models\User;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class DiagnosticResultResource extends Resource
 {
@@ -19,15 +23,21 @@ class DiagnosticResultResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasAnyRole(['admin', 'dosen']) ?? false;
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasAnyRole(['admin', 'dosen']) ?? false;
     }
 
     public static function canCreate(): bool
     {
-        return auth()->user()?->hasRole('admin') ?? false;
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasRole('admin') ?? false;
     }
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['user']);
     }
@@ -70,8 +80,16 @@ class DiagnosticResultResource extends Resource
                     }),
             ])
             ->recordActions([
-                \Filament\Actions\EditAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
-                \Filament\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->hasRole('admin')),
+                Actions\EditAction::make()->visible(function () {
+                    /** @var User|null $user */
+                    $user = Auth::user();
+                    return $user?->hasRole('admin') ?? false;
+                }),
+                Actions\DeleteAction::make()->visible(function () {
+                    /** @var User|null $user */
+                    $user = Auth::user();
+                    return $user?->hasRole('admin') ?? false;
+                }),
             ]);
     }
 

@@ -4,11 +4,14 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
 class UserResource extends Resource
@@ -20,10 +23,13 @@ class UserResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasRole('admin') ?? false;
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasRole('admin') ?? false;
     }
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['roles']);
     }
@@ -73,7 +79,7 @@ class UserResource extends Resource
                         'dosen'     => 'Dosen',
                         'mahasiswa' => 'Mahasiswa',
                     ])
-                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) {
+                    ->query(function (Builder $query, array $data) {
                         return $query->when(
                             $data['value'] ?? null,
                             fn ($q, $role) => $q->whereHas('roles', fn ($r) => $r->where('name', $role))
@@ -81,12 +87,12 @@ class UserResource extends Resource
                     }),
             ])
             ->recordActions([
-                \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make(),
+                Actions\ViewAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()]),
+                Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()]),
             ]);
     }
 

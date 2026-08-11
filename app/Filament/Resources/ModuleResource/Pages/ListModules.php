@@ -3,9 +3,13 @@
 namespace App\Filament\Resources\ModuleResource\Pages;
 
 use App\Filament\Resources\ModuleResource;
-use App\Filament\Imports\ModuleImporter;
+use App\Models\Module;
+use App\Services\Excel\ExcelModuleImporter;
 use Filament\Actions;
+use Filament\Forms\Components\FileUpload;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Storage;
 
 class ListModules extends ListRecords
 {
@@ -24,24 +28,24 @@ class ListModules extends ListRecords
                         ->toHtmlString()
                 )
                 ->form([
-                    \Filament\Forms\Components\FileUpload::make('file')
+                    FileUpload::make('file')
                         ->label('Excel File (.xlsx)')
                         ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
                         ->required(),
                 ])
                 ->action(function (array $data): void {
                     $filePath = $data['file'];
-                    $fullPath = \Illuminate\Support\Facades\Storage::disk('local')->path($filePath);
+                    $fullPath = Storage::disk('local')->path($filePath);
 
                     if (!file_exists($fullPath)) {
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->title('File tidak ditemukan')
                             ->danger()
                             ->send();
                         return;
                     }
 
-                    $importer = app(\App\Services\Excel\ExcelModuleImporter::class);
+                    $importer = app(ExcelModuleImporter::class);
                     $result = $importer->parse($fullPath);
 
                     $created = 0;
@@ -53,7 +57,7 @@ class ListModules extends ListRecords
                         $questionsData = $item['questions'] ?? [];
 
                         // Create module
-                        $module = \App\Models\Module::create($moduleData);
+                        $module = Module::create($moduleData);
 
                         // Create skeleton lessons
                         foreach ($lessonsData as $lesson) {
@@ -74,19 +78,19 @@ class ListModules extends ListRecords
                             ->map(fn ($e) => "Baris {$e['row']}: " . implode(', ', $e['reasons']))
                             ->implode("\n");
 
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->title("Import selesai: {$created} berhasil, {$errorCount} gagal")
                             ->body($errorSummary)
                             ->warning()
                             ->send();
                     } else {
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->title("Import berhasil: {$created} modul beserta kerangka lesson ditambahkan")
                             ->success()
                             ->send();
                     }
 
-                    \Illuminate\Support\Facades\Storage::disk('local')->delete($filePath);
+                    Storage::disk('local')->delete($filePath);
                 }),
         ];
     }

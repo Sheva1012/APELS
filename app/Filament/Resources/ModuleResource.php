@@ -5,11 +5,16 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ModuleResource\Pages;
 use App\Filament\Resources\ModuleResource\RelationManagers;
 use App\Models\Module;
+use App\Models\User;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class ModuleResource extends Resource
 {
@@ -20,7 +25,10 @@ class ModuleResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasAnyRole(['admin', 'dosen']) ?? false;
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasAnyRole(['admin', 'dosen']) ?? false;
     }
 
     public static function form(Schema $schema): Schema
@@ -31,8 +39,8 @@ class ModuleResource extends Resource
         ));
 
         return $schema->components([
-            \Filament\Schemas\Components\Tabs::make('Module Builder')->tabs([
-                \Filament\Schemas\Components\Tabs\Tab::make('Module Info')
+            Tabs::make('Module Builder')->tabs([
+                Tab::make('Module Info')
                     ->icon('heroicon-o-information-circle')
                     ->schema([
                         Forms\Components\TextInput::make('title')->required()->maxLength(255),
@@ -47,7 +55,7 @@ class ModuleResource extends Resource
                         Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
                         Forms\Components\Toggle::make('is_active')->default(true),
                     ])->columns(2),
-                \Filament\Schemas\Components\Tabs\Tab::make('AI Open Prompt')
+                Tab::make('AI Open Prompt')
                     ->icon('heroicon-o-sparkles')
                     ->schema([
                         Forms\Components\Textarea::make('writing_prompt')
@@ -81,8 +89,8 @@ class ModuleResource extends Resource
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->recordActions([\Filament\Actions\ViewAction::make(), \Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
-            ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
+            ->recordActions([Actions\ViewAction::make(), Actions\EditAction::make(), Actions\DeleteAction::make()])
+            ->toolbarActions([Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()])]);
     }
 
     public static function getRelations(): array

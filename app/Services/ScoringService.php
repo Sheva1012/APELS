@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 /**
@@ -41,11 +42,11 @@ class ScoringService
      * Grammar  : total bobot = 18 (3×1 + 3×2 + 3×3)
      * Vocabulary: total bobot = 21 (4×1 + 4×2 + 3×3)
      *
-     * @param  \Illuminate\Support\Collection  $questions  Koleksi Question model/array dengan key difficulty, id, correct_answer.
-     * @param  array<int|string, string>       $answers    Map questionId => jawaban user ('a'/'b'/'c'/'d').
-     * @return int                                          Skor 0–100.
+     * @param  Collection                $questions  Koleksi Question model/array dengan key difficulty, id, correct_answer.
+     * @param  array<int|string, string> $answers    Map questionId => jawaban user ('a'/'b'/'c'/'d').
+     * @return int                                   Skor 0–100.
      */
-    public function scoreSection(\Illuminate\Support\Collection $questions, array $answers): int
+    public function scoreSection(Collection $questions, array $answers): int
     {
         $earned = 0;
         $total  = $questions->sum(fn($q) => is_array($q) ? ($q['difficulty'] ?? 1) : $q->difficulty);
@@ -68,7 +69,8 @@ class ScoringService
                     $acceptable = is_array($ansJson) ? ($ansJson['acceptable_answers'] ?? []) : [];
                     $givenStr = strtolower(trim((string)$given));
                     foreach ($acceptable as $acc) {
-                        if (strtolower(trim((string)$acc)) === $givenStr) {
+                        $accText = is_array($acc) ? ($acc['answer'] ?? '') : $acc;
+                        if (strtolower(trim((string)$accText)) === $givenStr) {
                             $isCorrect = true;
                             break;
                         }
@@ -76,7 +78,7 @@ class ScoringService
                 } elseif ($qType === 'matching' || $qType === 'ordering') {
                     $ansJson = is_array($q) ? ($q['answer_json'] ?? []) : ($q->answer_json ?? []);
                     if (is_array($given) && is_array($ansJson)) {
-                        if ($given === $ansJson) {
+                        if (json_encode($given) === json_encode($ansJson)) {
                             $isCorrect = true;
                         }
                     }

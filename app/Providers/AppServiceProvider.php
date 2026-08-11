@@ -2,7 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,15 +26,15 @@ class AppServiceProvider extends ServiceProvider
     {
         // Fallback for Filament HTML Sanitizer on PHP < 8.4 / Shared hosting (InfinityFree)
         // Prevents: Class "Dom\HTMLDocument" not found
-        \Illuminate\Support\Str::macro('sanitizeHtml', function (string $html): string {
+        Str::macro('sanitizeHtml', function (string $html): string {
             return strip_tags($html, '<b><i><strong><em><a><ul><ol><li><p><br><span><div><small><sub><sup>');
         });
 
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+            if (Schema::hasTable('settings')) {
                 // Cache settings for 1 hour to prevent DB query on every request
-                $settings = \Illuminate\Support\Facades\Cache::remember('app_settings', 3600, function () {
-                    return \App\Models\Setting::all()->pluck('value', 'key')->toArray();
+                $settings = Cache::remember('app_settings', 3600, function () {
+                    return Setting::all()->pluck('value', 'key')->toArray();
                 });
 
                 if (isset($settings['GROQ_API_KEY'])) {
@@ -50,7 +55,7 @@ class AppServiceProvider extends ServiceProvider
                     config(['apels.nlp_timeout' => $settings['APELS_NLP_TIMEOUT']]);
                 }
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Ignore DB errors during initial migrations
         }
     }

@@ -2,7 +2,9 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\DiagnosticResult;
 use Filament\Actions\BulkActionGroup;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,18 +19,18 @@ class LatestDiagnosticResults extends TableWidget
     {
         return $table
             ->query(
-                \App\Models\DiagnosticResult::query()->latest()->limit(5)
+                DiagnosticResult::query()->latest()->limit(5)
             )
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('user.name')
+                TextColumn::make('user.name')
                     ->label('Student')
                     ->searchable(),
-                \Filament\Tables\Columns\TextColumn::make('overall')
+                TextColumn::make('overall')
                     ->label('Overall Score')
                     ->badge()
                     ->color(fn ($state) => $state >= 70 ? 'success' : 'warning')
                     ->formatStateUsing(fn ($state) => number_format($state, 1)),
-                \Filament\Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Date')
                     ->dateTime('d M Y H:i'),
             ])

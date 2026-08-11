@@ -29,12 +29,18 @@ class IntegrationApi extends Page implements HasForms
     // Hanya admin yang bisa melihat dan mengakses halaman ini
     public static function canAccess(): bool
     {
-        return auth()->check() && auth()->user()->hasRole('admin');
+        /** @var \App\Models\User|null $user */
+        $user = \Illuminate\Support\Facades\Auth::user();
+
+        return $user?->hasRole('admin') ?? false;
     }
 
     public static function shouldRegisterNavigation(): bool
     {
-        return auth()->check() && auth()->user()->hasRole('admin');
+        /** @var \App\Models\User|null $user */
+        $user = \Illuminate\Support\Facades\Auth::user();
+
+        return $user?->hasRole('admin') ?? false;
     }
 
     public function mount(): void

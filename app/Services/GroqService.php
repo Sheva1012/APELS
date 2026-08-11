@@ -2,8 +2,13 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
+use Throwable;
 
 /**
  * GroqService — HTTP client wrapper for Groq Cloud API.
@@ -40,12 +45,12 @@ class GroqService
      * @param  string  $audioPath  Absolute path to audio file on disk.
      * @param  string  $language   Language code (default: 'en').
      * @return array{text: string}  Transcription result.
-     * @throws \Illuminate\Http\Client\RequestException
+     * @throws RequestException
      */
     public function transcribeAudio(string $audioPath, string $language = 'en'): array
     {
         if (empty($this->apiKey)) {
-            throw new \RuntimeException('GROQ_API_KEY is not set in environment variables.');
+            throw new RuntimeException('GROQ_API_KEY is not set in environment variables.');
         }
 
         $model = config('groq.whisper_model', 'whisper-large-v3');
@@ -63,10 +68,10 @@ class GroqService
                     'model'    => $model,
                     'language' => $language,
                 ]);
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             $errorMsg = "Layanan Speech-to-Text (Whisper) melebihi batas waktu (timeout {$timeout} detik). Silakan coba lagi.";
             Log::error("GroqService::transcribeAudio — {$errorMsg}", ['error' => $e->getMessage(), 'audio_path' => $audioPath]);
-            throw new \RuntimeException($errorMsg, 408, $e);
+            throw new RuntimeException($errorMsg, 408, $e);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -147,10 +152,10 @@ class GroqService
                     'Content-Type'  => 'application/json',
                 ])
                 ->post($this->baseUrl . '/chat/completions', $payload);
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             $errorMsg = "Layanan NLP (Llama 3) melebihi batas waktu (timeout {$timeout} detik). Silakan coba lagi.";
             Log::error("GroqService::chatCompletion — {$errorMsg}", ['error' => $e->getMessage(), 'model' => $model]);
-            throw new \RuntimeException($errorMsg, 408, $e);
+            throw new RuntimeException($errorMsg, 408, $e);
         }
 
         if ($response->failed()) {
@@ -169,7 +174,7 @@ class GroqService
                 'messages' => $messages,
             ]);
 
-            throw new \RuntimeException($errorMsg, $status);
+            throw new RuntimeException($errorMsg, $status);
         }
 
         return $response->json();
@@ -178,16 +183,16 @@ class GroqService
     /**
      * Create a pre-configured HTTP request client.
      */
-    private function createHttpClient(?int $timeout = null): \Illuminate\Http\Client\PendingRequest
+    private function createHttpClient(?int $timeout = null): PendingRequest
     {
         $effectiveTimeout = $timeout ?? $this->timeout;
 
         $client = Http::timeout($effectiveTimeout)
-            ->retry(3, 1000, function (\Throwable $exception, \Illuminate\Http\Client\PendingRequest $request) {
-                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+            ->retry(3, 1000, function (Throwable $exception, PendingRequest $request) {
+                if ($exception instanceof RequestException) {
                     return in_array($exception->response->status(), [429, 500, 502, 503, 504]);
                 }
-                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                return $exception instanceof ConnectionException;
             }, throw: false);
 
         if (app()->environment('local', 'testing') && config('groq.verify_ssl', false) === false) {

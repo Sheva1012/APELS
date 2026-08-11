@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ModuleResource\RelationManagers;
 
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -57,16 +58,16 @@ class LessonsRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                \Filament\Actions\CreateAction::make(),
+                Actions\CreateAction::make(),
             ])
             ->recordActions([
-                \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make(),
+                Actions\ViewAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
