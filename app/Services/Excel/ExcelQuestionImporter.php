@@ -57,8 +57,8 @@ class ExcelQuestionImporter
         $reasons = [];
 
         $set = strtoupper(trim($record['set'] ?? ''));
-        if (!in_array($set, self::VALID_SETS, true)) {
-            $reasons[] = "set harus salah satu dari: A, B, C";
+        if (empty($set)) {
+            $reasons[] = "set tidak boleh kosong";
         }
 
         foreach (['question', 'option_a', 'option_b', 'option_c', 'option_d'] as $field) {

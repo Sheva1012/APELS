@@ -4,7 +4,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\QuestionResource\Pages;
 use App\Models\Question;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -20,16 +23,38 @@ class QuestionResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasAnyRole(['admin', 'dosen']) ?? false;
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasAnyRole(['admin', 'dosen']) ?? false;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Forms\Components\Select::make('set')
-                ->options(['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'])
+                ->label('Set Soal')
+                ->options(function () {
+                    $sets = Question::whereNotNull('set')->distinct()->pluck('set', 'set')->toArray();
+                    $defaults = ['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'];
+                    foreach ($sets as $key => $val) {
+                        if (!isset($defaults[$key])) {
+                            $defaults[$key] = 'Set ' . $key;
+                        }
+                    }
+                    ksort($defaults);
+                    return $defaults;
+                })
+                ->createOptionForm([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Nama/Kode Set Baru (Contoh: D, E)')
+                        ->required()
+                        ->maxLength(10),
+                ])
+                ->createOptionUsing(fn (array $data) => strtoupper(trim($data['name'])))
+                ->searchable()
                 ->required(),
-            Forms\Components\Textarea::make('question')->required()->maxLength(1000)->rows(3)->columnSpanFull(),
+            Forms\Components\RichEditor::make('question')->required()->maxLength(1000)->columnSpanFull(),
             Forms\Components\TextInput::make('option_a')->label('Option A')->required()->maxLength(1000),
             Forms\Components\TextInput::make('option_b')->label('Option B')->required()->maxLength(1000),
             Forms\Components\TextInput::make('option_c')->label('Option C')->required()->maxLength(1000),
@@ -55,7 +80,7 @@ class QuestionResource extends Resource
                     ->color(fn (string $state): string => match ($state) {
                         'A' => 'primary', 'B' => 'warning', 'C' => 'success', default => 'gray',
                     })->sortable(),
-                Tables\Columns\TextColumn::make('question')->limit(60)->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('question')->formatStateUsing(fn ($state) => html_entity_decode(strip_tags($state), ENT_QUOTES | ENT_HTML5, 'UTF-8'))->limit(60)->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('type')->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'grammar' => 'info', 'vocabulary' => 'success', default => 'gray',
@@ -68,15 +93,25 @@ class QuestionResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 Tables\Filters\SelectFilter::make('set')
-                    ->options(['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C']),
+                    ->options(function () {
+                        $sets = Question::whereNotNull('set')->distinct()->pluck('set', 'set')->toArray();
+                        $defaults = ['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'];
+                        foreach ($sets as $key => $val) {
+                            if (!isset($defaults[$key])) {
+                                $defaults[$key] = 'Set ' . $key;
+                            }
+                        }
+                        ksort($defaults);
+                        return $defaults;
+                    }),
                 Tables\Filters\SelectFilter::make('type')
                     ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary']),
                 Tables\Filters\SelectFilter::make('tag')
                     ->options(['basic'=>'Basic','intermediate'=>'Intermediate','advanced'=>'Advanced']),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
-            ->recordActions([\Filament\Actions\ViewAction::make(), \Filament\Actions\EditAction::make(), \Filament\Actions\DeleteAction::make()])
-            ->toolbarActions([\Filament\Actions\BulkActionGroup::make([\Filament\Actions\DeleteBulkAction::make()])]);
+            ->recordActions([Actions\ViewAction::make(), Actions\EditAction::make(), Actions\DeleteAction::make()])
+            ->toolbarActions([Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

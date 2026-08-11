@@ -42,12 +42,25 @@ class DiagnosticService
 
     /**
      * Tentukan SET aktif berdasarkan jumlah attempt sebelumnya.
-     * Rotasi: attempt%3 → index SET (Req §4).
+     * Rotasi dinamis berdasarkan seluruh SET aktif yang ada di database.
      */
     public function resolveActiveSet(int $userId): string
     {
+        $activeSets = \App\Models\Question::whereNull('module_id')
+            ->where('is_active', true)
+            ->whereNotNull('set')
+            ->distinct()
+            ->pluck('set')
+            ->sort()
+            ->values()
+            ->toArray();
+
+        if (empty($activeSets)) {
+            $activeSets = self::SETS;
+        }
+
         $attempt = DiagnosticResult::where('user_id', $userId)->count();
-        return self::SETS[$attempt % count(self::SETS)];
+        return $activeSets[$attempt % count($activeSets)];
     }
 
     /**
@@ -117,9 +130,9 @@ class DiagnosticService
             'answers'               => $input['answers'] ?? null,
         ]);
 
-        // 3. Dispatch async job for speaking audio or run sync when no audio (Req 4.3, 4.4)
+        // 3. Process speaking audio synchronously (Req 4.3, 4.4)
         if ($audioPath) {
-            ProcessSpeakingAudio::dispatch($userId, $audioPath, $diagnostic->id);
+            ProcessSpeakingAudio::dispatchSync($userId, $audioPath, $diagnostic->id);
         } else {
             // No audio — run engine synchronously with speaking=0 (Req 4.4)
             $diagnostic->update(['is_speaking_processed' => true]);
