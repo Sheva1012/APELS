@@ -50,8 +50,17 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
     #[Computed]
     public function modules()
     {
-        // Get all modules for the same learning path as the current lesson's module
-        return Module::where('path_key', $this->lesson->module->path_key)
+        $userId = auth()->id();
+        $unlockedModuleIds = \App\Models\UserModuleProgress::where('user_id', $userId)
+            ->where('is_unlocked', true)
+            ->pluck('module_id')
+            ->toArray();
+
+        $allowedModuleIds = array_unique(array_merge($unlockedModuleIds, [$this->lesson->module_id]));
+
+        // Get only unlocked modules for the same learning path as the current lesson's module
+        return Module::whereIn('id', $allowedModuleIds)
+            ->where('path_key', $this->lesson->module->path_key)
             ->where('is_active', true)
             ->with(['lessons' => fn($q) => $q->where('is_active', true)->orderBy('order_index')])
             ->orderBy('order_index')
@@ -179,7 +188,7 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
         </main>
         
         <!-- Bottom Nav (Fixed to Main Content Area) -->
-        <div class="absolute bottom-0 left-0 right-0 lg:right-[320px] xl:right-[350px] h-16 bg-white/95 dark:bg-[#121212]/95 backdrop-blur-sm border-t border-gray-200 dark:border-zinc-800 flex items-center justify-between px-6 lg:px-10 z-10 transition-all duration-300">
+        <div class="absolute bottom-0 left-0 right-0 lg:right-[320px] xl:right-[350px] h-16 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-zinc-800 flex items-center justify-between px-6 lg:px-10 z-10 transition-all duration-300">
             @php
                 $allLessons = $this->getAllLessonsInPath();
                 $currentIndex = $allLessons->search(fn($l) => $l->id === $lesson->id);
@@ -190,37 +199,38 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
                 $isLastLessonInModule = $currentModuleLessons->isNotEmpty() && $currentModuleLessons->last()->id === $lesson->id;
             @endphp
             
+            <!-- Left: Previous Lesson / Disabled Current if first -->
             <div class="flex-1 flex justify-start">
                 @if($hasPrev)
-                    <button wire:click="goToPrevious" class="flex items-center gap-2 text-[13px] font-semibold text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition group">
+                    <button wire:click="goToPrevious" class="flex items-center gap-2 text-[13px] font-semibold text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition group">
                         <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                         <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">{{ $allLessons[$currentIndex - 1]->title }}</span>
                         <span class="sm:hidden">Sebelumnya</span>
                     </button>
+                @else
+                    <div class="flex items-center gap-2 text-[13px] font-medium text-zinc-400 dark:text-zinc-600 select-none">
+                        <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">{{ $lesson->title }}</span>
+                        <span class="sm:hidden">Awal Modul</span>
+                    </div>
                 @endif
             </div>
-            
-            <div class="flex-1 flex justify-center">
-                <div class="text-[13px] font-bold text-zinc-800 dark:text-zinc-200 truncate px-4">
-                    {{ $lesson->title }}
-                </div>
-            </div>
 
+            <!-- Right: Next Lesson / Quiz / Finish -->
             <div class="flex-1 flex justify-end">
                 @if($isLastLessonInModule)
                     <button wire:click="markCompleteAndGoToQuiz" class="flex items-center gap-2 text-[13px] font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition group">
                         <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">Mulai Quiz Modul</span>
-                        <span class="sm:hidden">Quiz</span>
+                        <span class="sm:hidden">Quiz Modul</span>
                         <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
                 @elseif($hasNext)
                     <button wire:click="markCompleteAndNext" class="flex items-center gap-2 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition group">
-                        <span class="truncate max-w-[150px] sm:max-w-[200px] hidden sm:inline">{{ $allLessons[$currentIndex + 1]->title }}</span>
+                        <span class="truncate max-w-[150px] sm:max-w-[250px] hidden sm:inline">{{ $allLessons[$currentIndex + 1]->title }}</span>
                         <span class="sm:hidden">Selanjutnya</span>
                         <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </button>
                 @else
-                    <button wire:click="markCompleteAndNext" class="flex items-center gap-2 text-[13px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 transition group">
+                    <button wire:click="markCompleteAndNext" class="flex items-center gap-2 text-[13px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition group">
                         <span>Selesai Pembelajaran</span>
                         <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     </button>
@@ -254,9 +264,20 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
             
             <!-- Progress Section -->
             @php
-                $totalLessons = $allLessons->count();
-                $completedCount = count($completedLessonIds);
-                $percentage = $totalLessons > 0 ? round(($completedCount / $totalLessons) * 100) : 0;
+                $user = auth()->user();
+                $completedModuleIds = \App\Models\UserModuleProgress::where('user_id', $user->id)
+                    ->where('is_completed', true)
+                    ->pluck('module_id')
+                    ->toArray();
+
+                $sidebarLessonIds = $allLessons->pluck('id')->toArray();
+                $completedSidebarLessonsCount = count(array_intersect($completedLessonIds, $sidebarLessonIds));
+
+                $totalItems = count($sidebarLessonIds) + $this->modules->count();
+                $completedItems = $completedSidebarLessonsCount + count(array_intersect($this->modules->pluck('id')->toArray(), $completedModuleIds));
+                
+                $rawPercentage = $totalItems > 0 ? (int) round(($completedItems / $totalItems) * 100) : 0;
+                $percentage = min(100, max(0, $rawPercentage));
             @endphp
             <div class="px-6 py-5 border-b border-gray-200 dark:border-zinc-800">
                 <div class="flex justify-between items-center mb-2.5">
@@ -274,12 +295,13 @@ new #[Layout('components.layouts.app-lesson')] class extends Component {
                         <button @click="open = !open" class="w-full flex items-center justify-between px-6 py-4 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left focus:outline-none">
                             <span class="font-bold text-[13px] text-zinc-800 dark:text-zinc-200 pr-2 flex-1">{{ $mod->title }}</span>
                             <div class="flex items-center gap-2">
-                                <!-- Check if all lessons in module are complete -->
+                                <!-- Check if module is complete in DB (all lessons + quiz passed) -->
                                 @php
                                     $modLessonIds = $mod->lessons->pluck('id')->toArray();
                                     $allModComplete = count(array_diff($modLessonIds, $completedLessonIds)) === 0;
+                                    $modIsCompleted = in_array($mod->id, $completedModuleIds);
                                 @endphp
-                                @if($allModComplete && count($modLessonIds) > 0)
+                                @if($modIsCompleted)
                                     <svg class="w-[18px] h-[18px] text-emerald-500 shrink-0 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
                                     </svg>
