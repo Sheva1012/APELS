@@ -26,6 +26,7 @@ new #[Layout('components.layouts.app')] class extends Component {
     public bool   $shouldReEvaluate  = false;
     public bool   $hasTest           = false;
     public ?string $overallReadiness = null;
+    public ?string $nextGoal         = null;
     public ?string $speakingTranscript = null;
     public int    $speakingWordCount  = 0;
     public ?string $speakingReference = null;
@@ -105,6 +106,12 @@ new #[Layout('components.layouts.app')] class extends Component {
             default        => 'Basic',
         };
 
+        $this->nextGoal = match ($this->overallReadiness) {
+            'Basic'        => 'Intermediate Level Mastery',
+            'Intermediate' => 'Advanced Level Proficiency',
+            default        => 'Business Communication Ready',
+        };
+
         // Analytics Calculations
         $sScore = $this->skills['speaking'];
         $gScore = $this->skills['grammar'];
@@ -156,25 +163,50 @@ new #[Layout('components.layouts.app')] class extends Component {
             ? $latestFeedback->created_at->diffForHumans(short: true)
             : null;
 
+        // Synchronize module unlock state based on current diagnostic scores
+        app(\App\Services\AdaptiveEngineService::class)->run($userId, [
+            'speaking'   => $this->skills['speaking'],
+            'grammar'    => $this->skills['grammar'],
+            'vocabulary' => $this->skills['vocabulary'],
+            'overall'    => $diagnostic->overall ?? 0,
+        ]);
+
         // Module progress (Req 13.5, 13.6)
         $moduleProgress = UserModuleProgress::where('user_id', $userId)
-            ->with('module')
+            ->with('module.lessons')
             ->get()
             ->sortBy(fn($mp) => $mp->module?->order_index ?? 999);
 
-        $this->modules = $moduleProgress->map(fn ($mp) => [
-            'title'       => $mp->module?->title       ?? 'Unknown',
-            'description' => $mp->module?->description ?? '',
-            'level'       => $mp->module?->level       ?? 'basic',
-            'tag'         => $mp->module?->tag         ?? '',
-            'is_unlocked' => $mp->is_unlocked,
-            'is_completed'=> $mp->is_completed,
-            'score'       => $mp->score,
-            'status'      => $this->resolveStatus($mp),
-        ])->toArray();
+        $completedLessonIds = \App\Models\UserLessonProgress::where('user_id', $userId)
+            ->pluck('lesson_id')
+            ->toArray();
 
-        $this->totalModules     = count($this->modules);
-        $this->completedModules = collect($this->modules)->where('is_completed', true)->count();
+        $this->modules = $moduleProgress->map(function ($mp) use ($completedLessonIds) {
+            $moduleLessons = $mp->module?->lessons ?? collect();
+            $activeLessons = $moduleLessons->where('is_active', true);
+
+            $totalItems = $activeLessons->count() > 0 ? $activeLessons->count() + 1 : 0;
+            $completedReadingLessons = $activeLessons->whereIn('id', $completedLessonIds)->count();
+            $completedItems = $completedReadingLessons + ($mp->is_completed ? 1 : 0);
+
+            $progressPercent = $totalItems > 0 ? (int) round(($completedItems / $totalItems) * 100) : 0;
+
+            return [
+                'title'            => $mp->module?->title       ?? 'Unknown',
+                'description'      => $mp->module?->description ?? '',
+                'level'            => $mp->module?->level       ?? 'basic',
+                'tag'              => $mp->module?->tag         ?? '',
+                'is_unlocked'      => $mp->is_unlocked,
+                'is_completed'     => $mp->is_completed,
+                'score'            => $mp->score,
+                'progress_percent' => $progressPercent,
+                'status'           => $this->resolveStatus($mp),
+            ];
+        })->toArray();
+
+        $unlockedModules        = collect($this->modules)->where('is_unlocked', true);
+        $this->totalModules     = $unlockedModules->count();
+        $this->completedModules = $unlockedModules->where('is_completed', true)->count();
         $this->remainingModules = max(0, $this->totalModules - $this->completedModules);
         $this->progress         = $this->totalModules > 0 ? (int) round($this->completedModules / $this->totalModules * 100) : 0;
 
@@ -639,12 +671,12 @@ new #[Layout('components.layouts.app')] class extends Component {
                                             {{ $mod['title'] }}
                                         </p>
                                         @if ($isInProgress)
-                                            <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{{ $mod['score'] ?? 0 }}%</span>
+                                            <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{{ $mod['progress_percent'] ?? 0 }}%</span>
                                         @endif
                                     </div>
                                     @if ($isInProgress)
                                         <div class="mt-1.5 w-full bg-black/10 dark:bg-black/40 rounded-full h-1">
-                                            <div class="bg-indigo-500 dark:bg-indigo-400 h-1 rounded-full transition-all duration-700" style="width: {{ $mod['score'] ?? 0 }}%"></div>
+                                            <div class="bg-indigo-500 dark:bg-indigo-400 h-1 rounded-full transition-all duration-700" style="width: {{ $mod['progress_percent'] ?? 0 }}%"></div>
                                         </div>
                                     @elseif ($isCompleted)
                                         <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Completed</p>
@@ -694,7 +726,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 </div>
                                 <div class="col-span-2 pt-2 border-t border-zinc-200 dark:border-indigo-500/20">
                                     <span class="block text-zinc-500 dark:text-indigo-300/70 mb-0.5">Next Goal:</span>
-                                    <span class="font-bold text-emerald-600 dark:text-emerald-400">Business Communication Ready</span>
+                                    <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ $nextGoal ?? 'Business Communication Ready' }}</span>
                                 </div>
                             </div>
                         </div>
@@ -734,10 +766,46 @@ new #[Layout('components.layouts.app')] class extends Component {
                     @php
                         $spScore = $skills['speaking'] ?? 0;
                         $spTip = match(true) {
-                            $spScore >= 80 => ['level' => 'Excellent',      'color' => 'emerald', 'emoji' => '🏆', 'tip' => 'Pelafalan Anda sangat baik! AI mendeteksi kefasihan tinggi. Pertahankan dengan latihan percakapan profesional dan diskusi akademik.'],
-                            $spScore >= 60 => ['level' => 'Good',           'color' => 'indigo',  'emoji' => '👍', 'tip' => 'Pelafalan Anda sudah cukup baik. Fokus pada intonasi dan ritme kalimat. Coba baca teks bahasa Inggris dengan lantang setiap hari.'],
-                            $spScore >= 40 => ['level' => 'Fair',           'color' => 'amber',   'emoji' => '📈', 'tip' => 'Ada beberapa bagian yang perlu ditingkatkan. Latih pronunciation dengan mengikuti audio native speaker dan rekam suara Anda sendiri.'],
-                            default        => ['level' => 'Needs Practice', 'color' => 'red',     'emoji' => '💪', 'tip' => 'Mulai dari dasar: latih pelafalan kata per kata dengan kamus audio online, lalu tingkatkan ke kalimat pendek secara bertahap.'],
+                            $spScore >= 80 => [
+                                'level'     => 'Excellent',
+                                'emoji'     => '🏆',
+                                'badge'     => 'text-emerald-600 dark:text-emerald-400',
+                                'score'     => 'text-emerald-500',
+                                'container' => 'bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/20 dark:border-emerald-500/30',
+                                'title'     => 'text-emerald-700 dark:text-emerald-400',
+                                'text'      => 'text-emerald-900 dark:text-emerald-200',
+                                'tip'       => 'Pelafalan Anda sangat baik! AI mendeteksi kefasihan tinggi. Pertahankan dengan latihan percakapan profesional dan diskusi akademik.'
+                            ],
+                            $spScore >= 60 => [
+                                'level'     => 'Good',
+                                'emoji'     => '👍',
+                                'badge'     => 'text-indigo-600 dark:text-indigo-400',
+                                'score'     => 'text-indigo-500',
+                                'container' => 'bg-indigo-500/10 dark:bg-indigo-500/15 border-indigo-500/20 dark:border-indigo-500/30',
+                                'title'     => 'text-indigo-700 dark:text-indigo-400',
+                                'text'      => 'text-indigo-900 dark:text-indigo-200',
+                                'tip'       => 'Pelafalan Anda sudah cukup baik. Fokus pada intonasi dan ritme kalimat. Coba baca teks bahasa Inggris dengan lantang setiap hari.'
+                            ],
+                            $spScore >= 40 => [
+                                'level'     => 'Fair',
+                                'emoji'     => '📈',
+                                'badge'     => 'text-amber-600 dark:text-amber-400',
+                                'score'     => 'text-amber-500',
+                                'container' => 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/20 dark:border-amber-500/30',
+                                'title'     => 'text-amber-700 dark:text-amber-400',
+                                'text'      => 'text-amber-900 dark:text-amber-200',
+                                'tip'       => 'Ada beberapa bagian yang perlu ditingkatkan. Latih pronunciation dengan mengikuti audio native speaker dan rekam suara Anda sendiri.'
+                            ],
+                            default => [
+                                'level'     => 'Needs Practice',
+                                'emoji'     => '💪',
+                                'badge'     => 'text-red-600 dark:text-red-400',
+                                'score'     => 'text-red-500',
+                                'container' => 'bg-red-500/10 dark:bg-red-500/15 border-red-500/20 dark:border-red-500/30',
+                                'title'     => 'text-red-700 dark:text-red-400',
+                                'text'      => 'text-red-900 dark:text-red-200',
+                                'tip'       => 'Mulai dari dasar: latih pelafalan kata per kata dengan kamus audio online, lalu tingkatkan ke kalimat pendek secara bertahap.'
+                            ],
                         };
 
                         // ── Word-diff computation ────────────────────────────────
@@ -817,10 +885,10 @@ new #[Layout('components.layouts.app')] class extends Component {
                         {{-- Score badge --}}
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center gap-2">
-                                <span class="text-sm font-bold text-{{ $spTip['color'] }}-600 dark:text-{{ $spTip['color'] }}-400">{{ $spTip['emoji'] }} {{ $spTip['level'] }}</span>
+                                <span class="text-sm font-bold {{ $spTip['badge'] }}">{{ $spTip['emoji'] }} {{ $spTip['level'] }}</span>
                                 <span class="text-[10px] text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 rounded-full px-2 py-0.5">{{ $speakingWordCount }} words detected</span>
                             </div>
-                            <span class="text-lg font-black text-{{ $spTip['color'] }}-500">{{ $spScore }}%</span>
+                            <span class="text-lg font-black {{ $spTip['score'] }}">{{ $spScore }}%</span>
                         </div>
 
                         {{-- Score progress bar --}}
@@ -956,11 +1024,11 @@ new #[Layout('components.layouts.app')] class extends Component {
                         @endif
 
                         {{-- Pronunciation tip --}}
-                        <div class="flex gap-2.5 p-3 bg-{{ $spTip['color'] }}-50 dark:bg-{{ $spTip['color'] }}-900/15 border border-{{ $spTip['color'] }}-200 dark:border-{{ $spTip['color'] }}-800/30 rounded-xl">
+                        <div class="flex gap-2.5 p-3 rounded-xl border {{ $spTip['container'] }}">
                             <span class="text-base shrink-0 mt-0.5">💡</span>
                             <div>
-                                <p class="text-[10px] font-bold text-{{ $spTip['color'] }}-700 dark:text-{{ $spTip['color'] }}-400 uppercase tracking-wide mb-0.5">Pronunciation Tip</p>
-                                <p class="text-[12px] text-{{ $spTip['color'] }}-800 dark:text-{{ $spTip['color'] }}-300 leading-relaxed">{{ $spTip['tip'] }}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-wide mb-0.5 {{ $spTip['title'] }}">Pronunciation Tip</p>
+                                <p class="text-[12px] leading-relaxed {{ $spTip['text'] }}">{{ $spTip['tip'] }}</p>
                             </div>
                         </div>
                     </div>

@@ -37,6 +37,16 @@ new #[Layout('components.layouts.app')] class extends Component {
             $this->pathCondition = $cfg['condition'] ?? null;
         }
 
+        $diagnostic = \App\Models\DiagnosticResult::where('user_id', $userId)->latest()->first();
+        if ($diagnostic) {
+            app(\App\Services\AdaptiveEngineService::class)->run($userId, [
+                'speaking'   => $diagnostic->speaking ?? 0,
+                'grammar'    => $diagnostic->grammar ?? 0,
+                'vocabulary' => $diagnostic->vocabulary ?? 0,
+                'overall'    => $diagnostic->overall ?? 0,
+            ]);
+        }
+
         $progress = UserModuleProgress::where('user_id', $userId)
             ->with('module.lessons')
             ->get()
@@ -48,10 +58,13 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         $this->modules = $progress->map(function ($mp) use ($completedLessonIds) {
             $moduleLessons = $mp->module?->lessons ?? collect();
-            $totalLessons = $moduleLessons->where('is_active', true)->count();
-            $completedLessons = $moduleLessons->where('is_active', true)->whereIn('id', $completedLessonIds)->count();
+            $activeLessons = $moduleLessons->where('is_active', true);
 
-            $progressPercent = $totalLessons > 0 ? (int) round(($completedLessons / $totalLessons) * 100) : 0;
+            $totalItems = $activeLessons->count() > 0 ? $activeLessons->count() + 1 : 0;
+            $completedReadingLessons = $activeLessons->whereIn('id', $completedLessonIds)->count();
+            $completedItems = $completedReadingLessons + ($mp->is_completed ? 1 : 0);
+
+            $progressPercent = $totalItems > 0 ? (int) round(($completedItems / $totalItems) * 100) : 0;
 
             return [
                 'id'           => $mp->module_id,
@@ -70,8 +83,9 @@ new #[Layout('components.layouts.app')] class extends Component {
             ];
         })->values()->toArray();
 
-        $this->totalCount = count($this->modules);
-        $this->completedCount = collect($this->modules)->where('is_completed', true)->count();
+        $unlockedModules       = collect($this->modules)->where('is_unlocked', true);
+        $this->totalCount      = $unlockedModules->count();
+        $this->completedCount  = $unlockedModules->where('is_completed', true)->count();
         $this->progressPercent = $this->totalCount > 0
             ? (int) round($this->completedCount / $this->totalCount * 100)
             : 0;
