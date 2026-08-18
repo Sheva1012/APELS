@@ -38,6 +38,7 @@ class DiagnosticController extends Controller
 
         $grammarQs = Question::active()
             ->whereNull('module_id')
+            ->where(fn($q) => $q->whereNull('question_type')->orWhere('question_type', 'multiple_choice'))
             ->bySet($activeSet)
             ->byType('grammar')
             ->orderBy('difficulty')
@@ -45,6 +46,7 @@ class DiagnosticController extends Controller
 
         $vocabQs = Question::active()
             ->whereNull('module_id')
+            ->where(fn($q) => $q->whereNull('question_type')->orWhere('question_type', 'multiple_choice'))
             ->bySet($activeSet)
             ->byType('vocabulary')
             ->orderBy('difficulty')

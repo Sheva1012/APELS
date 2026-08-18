@@ -176,10 +176,31 @@ class AdaptiveEngineService
         return ['unlocked' => $unlocked, 'locked' => $locked];
     }
 
-    private function shouldUnlock(Module $module, string $pathKey, array $scores): bool
+    public function shouldUnlock(Module $module, string $pathKey, array $scores): bool
     {
-        // Hanya modul pertama (order_index == 1) yang terbuka secara default.
-        // Modul berikutnya akan terbuka setelah modul sebelumnya diselesaikan.
-        return $module->order_index === 1;
+        $speaking   = $scores['speaking']   ?? 0;
+        $grammar    = $scores['grammar']    ?? 0;
+        $vocabulary = $scores['vocabulary'] ?? 0;
+
+        $overall = $scores['overall'] ?? (($speaking + $grammar + $vocabulary) / 3);
+
+        $studentLevel = match (true) {
+            $overall >= 70 => 'advanced',
+            $overall >= 55 => 'intermediate',
+            default        => 'basic',
+        };
+
+        $moduleLevel = strtolower(trim($module->level ?? 'basic'));
+
+        if ($studentLevel === 'basic') {
+            return $moduleLevel === 'basic';
+        }
+
+        if ($studentLevel === 'intermediate') {
+            return in_array($moduleLevel, ['basic', 'intermediate'], true);
+        }
+
+        // Advanced: Semua modul (basic, intermediate, advanced, professional) terbuka
+        return true;
     }
 }

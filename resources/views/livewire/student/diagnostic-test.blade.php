@@ -53,12 +53,18 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         // Query sesuai spec §5 — set aktif, urut difficulty (basic→intermediate→advanced)
         $gQs = Question::active()
+            ->whereNull('module_id')
+            ->whereNotNull('set')
+            ->where(fn($q) => $q->whereNull('question_type')->orWhere('question_type', 'multiple_choice'))
             ->bySet($this->activeSet)
             ->byType('grammar')
             ->orderBy('difficulty')
             ->get();
 
         $vQs = Question::active()
+            ->whereNull('module_id')
+            ->whereNotNull('set')
+            ->where(fn($q) => $q->whereNull('question_type')->orWhere('question_type', 'multiple_choice'))
             ->bySet($this->activeSet)
             ->byType('vocabulary')
             ->orderBy('difficulty')
