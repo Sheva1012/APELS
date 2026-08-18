@@ -19,14 +19,9 @@ class LessonsRelationManager extends RelationManager
             ->components([
                 Forms\Components\Textarea::make('title')
                     ->required()
-                    ->rows(3),
-                Forms\Components\Select::make('type')
-                    ->options([
-                        'text' => 'Text',
-                        'video' => 'Video',
-                        'quiz' => 'Quiz',
-                    ])
-                    ->required()
+                    ->rows(3)
+                    ->columnSpanFull(),
+                Forms\Components\Hidden::make('type')
                     ->default('text'),
                 Forms\Components\RichEditor::make('content')
                     ->columnSpanFull(),
@@ -36,6 +31,9 @@ class LessonsRelationManager extends RelationManager
                 Forms\Components\TextInput::make('order_index')
                     ->numeric()
                     ->default(0)
+                    ->minValue(0)
+                    ->rules(['integer', 'min:0'])
+                    ->extraInputAttributes(['min' => 0])
                     ->required(),
                 Forms\Components\Toggle::make('is_active')
                     ->default(true),
@@ -49,7 +47,6 @@ class LessonsRelationManager extends RelationManager
             ->columns([
                 Tables\Columns\TextColumn::make('order_index')->sortable(),
                 Tables\Columns\TextColumn::make('title')->searchable(),
-                Tables\Columns\TextColumn::make('type')->badge(),
                 Tables\Columns\IconColumn::make('is_active')->boolean(),
             ])
             ->defaultSort('order_index')

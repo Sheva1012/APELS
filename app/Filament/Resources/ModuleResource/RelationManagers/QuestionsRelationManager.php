@@ -85,7 +85,7 @@ class QuestionsRelationManager extends RelationManager
                     ->visible(fn ($get) => $get('question_type') === 'ordering'),
                 Hidden::make('type')->default('grammar'),
                 Hidden::make('tag')->default('basic'),
-                Hidden::make('set')->default('A'),
+                Hidden::make('set')->default(null),
                 Toggle::make('is_active')->default(true),
             ]);
     }
@@ -104,7 +104,6 @@ class QuestionsRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()->label('Create Question'),
-                AssociateAction::make()->label('Pick from Bank'),
             ])
             ->recordActions([
                 ViewAction::make()->modalHeading('View Question'),

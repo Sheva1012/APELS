@@ -34,12 +34,21 @@ class QuestionResource extends Resource
         return $schema->components([
             Forms\Components\Select::make('set')
                 ->label('Set Soal')
-                ->options(function () {
+                ->options(function (?string $state = null) {
                     $sets = Question::whereNotNull('set')->distinct()->pluck('set', 'set')->toArray();
                     $defaults = ['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'];
                     foreach ($sets as $key => $val) {
-                        if (!isset($defaults[$key])) {
-                            $defaults[$key] = 'Set ' . $key;
+                        $keyStr = strtoupper(trim((string) $key));
+                        if ($keyStr !== '') {
+                            $code = str_starts_with($keyStr, 'SET ') ? strtoupper(trim(substr($keyStr, 4))) : $keyStr;
+                            $defaults[$code] = 'Set ' . $code;
+                        }
+                    }
+                    if ($state !== null && $state !== '') {
+                        $stateStr = strtoupper(trim((string) $state));
+                        $stateCode = str_starts_with($stateStr, 'SET ') ? strtoupper(trim(substr($stateStr, 4))) : $stateStr;
+                        if (!isset($defaults[$stateCode])) {
+                            $defaults[$stateCode] = 'Set ' . $stateCode;
                         }
                     }
                     ksort($defaults);
@@ -47,11 +56,17 @@ class QuestionResource extends Resource
                 })
                 ->createOptionForm([
                     Forms\Components\TextInput::make('name')
-                        ->label('Nama/Kode Set Baru (Contoh: D, E)')
+                        ->label('Nama/Kode Set Baru (Contoh: Set D, Set E)')
                         ->required()
-                        ->maxLength(10),
+                        ->maxLength(15),
                 ])
-                ->createOptionUsing(fn (array $data) => strtoupper(trim($data['name'])))
+                ->createOptionUsing(function (array $data) {
+                    $name = trim($data['name']);
+                    if (str_starts_with(strtoupper($name), 'SET ')) {
+                        return strtoupper(trim(substr($name, 4)));
+                    }
+                    return strtoupper($name);
+                })
                 ->searchable()
                 ->required(),
             Forms\Components\RichEditor::make('question')->required()->maxLength(1000)->columnSpanFull(),
@@ -77,8 +92,17 @@ class QuestionResource extends Resource
             ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('module_id'))
             ->columns([
                 Tables\Columns\TextColumn::make('set')->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'A' => 'primary', 'B' => 'warning', 'C' => 'success', default => 'gray',
+                    ->formatStateUsing(function (?string $state): string {
+                        if (!$state) return '';
+                        $upper = strtoupper(trim($state));
+                        return str_starts_with($upper, 'SET ') ? strtoupper(trim(substr($upper, 4))) : $upper;
+                    })
+                    ->color(fn (?string $state): string => match (strtoupper(trim((string) $state))) {
+                        'A', 'SET A' => 'primary',
+                        'B', 'SET B' => 'warning',
+                        'C', 'SET C' => 'success',
+                        'D', 'SET D' => 'info',
+                        default => 'gray',
                     })->sortable(),
                 Tables\Columns\TextColumn::make('question')->formatStateUsing(fn ($state) => html_entity_decode(strip_tags($state), ENT_QUOTES | ENT_HTML5, 'UTF-8'))->limit(60)->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('type')->badge()
@@ -97,8 +121,10 @@ class QuestionResource extends Resource
                         $sets = Question::whereNotNull('set')->distinct()->pluck('set', 'set')->toArray();
                         $defaults = ['A' => 'Set A', 'B' => 'Set B', 'C' => 'Set C'];
                         foreach ($sets as $key => $val) {
-                            if (!isset($defaults[$key])) {
-                                $defaults[$key] = 'Set ' . $key;
+                            $keyStr = strtoupper(trim((string) $key));
+                            if ($keyStr !== '') {
+                                $code = str_starts_with($keyStr, 'SET ') ? strtoupper(trim(substr($keyStr, 4))) : $keyStr;
+                                $defaults[$code] = 'Set ' . $code;
                             }
                         }
                         ksort($defaults);

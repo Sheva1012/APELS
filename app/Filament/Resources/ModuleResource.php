@@ -52,7 +52,12 @@ class ModuleResource extends Resource
                             ->required(),
                         Forms\Components\Select::make('tag')
                             ->options(['grammar'=>'Grammar','vocabulary'=>'Vocabulary'])->required(),
-                        Forms\Components\TextInput::make('order_index')->numeric()->default(0)->minValue(0),
+                        Forms\Components\TextInput::make('order_index')
+                            ->numeric()
+                            ->default(0)
+                            ->minValue(0)
+                            ->rules(['integer', 'min:0'])
+                            ->extraInputAttributes(['min' => 0]),
                         Forms\Components\Toggle::make('is_active')->default(true),
                     ])->columns(2),
                 Tab::make('AI Open Prompt')
