@@ -29,6 +29,7 @@ return [
     |
     | Requirement: 3 (Pembatasan Satu Diagnostic Test Per Hari).
     */
+    'daily_test_limit_enabled' => env('APELS_DAILY_TEST_LIMIT_ENABLED', false),
     'daily_test_limit' => env('APELS_DAILY_TEST_LIMIT', 4),
 
     /*

@@ -42,6 +42,12 @@ class EnsureDailyTestLimit
             return redirect()->route('login');
         }
 
+        $limitEnabled = (bool) config('apels.daily_test_limit_enabled', false);
+
+        if (! $limitEnabled) {
+            return $next($request);
+        }
+
         $limit = (int) config('apels.daily_test_limit', 4);
 
         $todayTestCount = DiagnosticResult::query()
@@ -49,10 +55,7 @@ class EnsureDailyTestLimit
             ->whereDate('created_at', today())
             ->count();
 
-        // $alreadyTestedToday = $todayTestCount >= $limit;
-        $alreadyTestedToday = false; // Temporarily remove limit as requested
-
-        if ($alreadyTestedToday) {
+        if ($todayTestCount >= $limit) {
             // API / AJAX: kembalikan JSON seperti biasa
             if ($request->expectsJson()) {
                 return ApiResponse::error(

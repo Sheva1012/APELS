@@ -47,6 +47,12 @@ class ReEvaluationService
      */
     public function canTakeTestToday(int $userId): bool
     {
+        $limitEnabled = (bool) config('apels.daily_test_limit_enabled', false);
+
+        if (! $limitEnabled) {
+            return true;
+        }
+
         $limit = (int) config('apels.daily_test_limit', 4);
         $count = DiagnosticResult::where('user_id', $userId)
             ->whereDate('created_at', today())
