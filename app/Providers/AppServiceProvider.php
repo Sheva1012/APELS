@@ -16,7 +16,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Fix public path resolution for shared hosting (InfinityFree / cPanel)
+        // where core app is placed in a subfolder (e.g. htdocs/apels_core)
+        if (! is_dir($this->app->publicPath())) {
+            $parentPath = realpath(base_path('../'));
+            if ($parentPath && file_exists($parentPath . '/index.php')) {
+                $this->app->usePublicPath($parentPath);
+            } else {
+                $this->app->usePublicPath(base_path());
+            }
+        }
     }
 
     /**
@@ -24,6 +33,11 @@ class AppServiceProvider extends ServiceProvider
      */ 
     public function boot(): void
     {
+        // Ensure storage/fonts directory exists for DomPDF
+        if (! is_dir(storage_path('fonts'))) {
+            @mkdir(storage_path('fonts'), 0775, true);
+        }
+
         // Fallback for Filament HTML Sanitizer on PHP < 8.4 / Shared hosting (InfinityFree)
         // Prevents: Class "Dom\HTMLDocument" not found
         Str::macro('sanitizeHtml', function (string $html): string {
