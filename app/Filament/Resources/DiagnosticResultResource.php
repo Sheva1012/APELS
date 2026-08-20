@@ -31,10 +31,31 @@ class DiagnosticResultResource extends Resource
 
     public static function canCreate(): bool
     {
+        return false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
         /** @var User|null $user */
         $user = Auth::user();
 
         return $user?->hasRole('admin') ?? false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasRole('admin') ?? false;
+    }
+
+    public static function canView(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasAnyRole(['admin', 'dosen']) ?? false;
     }
 
     public static function getEloquentQuery(): Builder
@@ -45,10 +66,35 @@ class DiagnosticResultResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Forms\Components\Select::make('user_id')->relationship('user', 'name')->required()->searchable(),
-            Forms\Components\TextInput::make('speaking')->numeric()->minValue(0)->maxValue(100),
-            Forms\Components\TextInput::make('grammar')->numeric()->minValue(0)->maxValue(100),
-            Forms\Components\TextInput::make('vocabulary')->numeric()->minValue(0)->maxValue(100),
+            Forms\Components\Select::make('user_id')
+                ->label('Mahasiswa')
+                ->relationship('user', 'name')
+                ->required()
+                ->searchable(),
+            Forms\Components\TextInput::make('set_used')
+                ->label('Set Soal')
+                ->placeholder('A / B / C'),
+            Forms\Components\TextInput::make('speaking')
+                ->label('Skor Speaking')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100),
+            Forms\Components\TextInput::make('grammar')
+                ->label('Skor Grammar')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100),
+            Forms\Components\TextInput::make('vocabulary')
+                ->label('Skor Vocabulary')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100),
+            Forms\Components\TextInput::make('overall')
+                ->label('Skor Akhir (Overall)')
+                ->numeric(),
+            Forms\Components\TextInput::make('attempt')
+                ->label('Percobaan ke-')
+                ->numeric(),
         ]);
     }
 
@@ -80,6 +126,7 @@ class DiagnosticResultResource extends Resource
                     }),
             ])
             ->recordActions([
+                Actions\ViewAction::make(),
                 Actions\EditAction::make()->visible(function () {
                     /** @var User|null $user */
                     $user = Auth::user();
