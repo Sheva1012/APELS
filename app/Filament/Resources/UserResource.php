@@ -37,27 +37,41 @@ class UserResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Forms\Components\TextInput::make('name')
-                ->required()->maxLength(255),
-            Forms\Components\TextInput::make('email')
-                ->email()->required()->unique(ignoreRecord: true)->maxLength(255),
-            Forms\Components\TextInput::make('nim')
-                ->label('NIM')->maxLength(20)->unique(ignoreRecord: true)->nullable(),
-            Forms\Components\TextInput::make('password')
-                ->password()
-                ->required(fn (string $operation): bool => $operation === 'create')
-                ->dehydrateStateUsing(fn (?string $state): ?string => $state ? Hash::make($state) : null)
-                ->dehydrated(fn (?string $state): bool => filled($state))
-                ->minLength(8)->maxLength(255),
             Forms\Components\Select::make('role')
                 ->label('Role')
                 ->options(['admin' => 'Admin', 'dosen' => 'Dosen', 'mahasiswa' => 'Mahasiswa'])
-                ->required()->default('mahasiswa')
+                ->required()
+                ->default('mahasiswa')
+                ->live()
                 ->afterStateHydrated(function (Forms\Components\Select $component, ?User $record) {
                     if ($record) {
                         $component->state($record->getRoleNames()->first());
                     }
                 }),
+            Forms\Components\TextInput::make('name')
+                ->required()
+                ->maxLength(255),
+            Forms\Components\TextInput::make('email')
+                ->email()
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
+            Forms\Components\TextInput::make('nim')
+                ->label('NIM')
+                ->maxLength(20)
+                ->unique(ignoreRecord: true)
+                ->nullable()
+                ->disabled(fn ($get): bool => $get('role') !== 'mahasiswa')
+                ->dehydrated(fn ($get): bool => $get('role') === 'mahasiswa')
+                ->placeholder(fn ($get): string => $get('role') && $get('role') !== 'mahasiswa' ? 'Tidak diperlukan untuk role ' . ucfirst((string) $get('role')) : 'Masukkan NIM')
+                ->helperText(fn ($get): ?string => $get('role') && $get('role') !== 'mahasiswa' ? 'NIM dinonaktifkan (hanya untuk role Mahasiswa).' : null),
+            Forms\Components\TextInput::make('password')
+                ->password()
+                ->required(fn (string $operation): bool => $operation === 'create')
+                ->dehydrateStateUsing(fn (?string $state): ?string => $state ? Hash::make($state) : null)
+                ->dehydrated(fn (?string $state): bool => filled($state))
+                ->minLength(8)
+                ->maxLength(255),
         ]);
     }
 
