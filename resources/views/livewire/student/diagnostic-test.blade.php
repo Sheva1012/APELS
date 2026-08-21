@@ -461,21 +461,21 @@ new #[Layout('components.layouts.app')] class extends Component {
                     <!-- Embedded interactive audio recorder -->
                     <div x-data="audioRecorder()" class="mt-4">
                         <!-- Direct Voice Recording -->
-                        <div class="flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-150 dark:border-zinc-900">
+                        <div class="flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-950/40 rounded-2xl border border-zinc-150 dark:border-zinc-900 w-full text-center">
                             <!-- Idle State -->
-                            <div x-show="status === 'idle'" class="text-center">
-                                <button type="button" @click="startRecording" class="w-20 h-20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all duration-300">
+                            <div x-show="status === 'idle'" class="flex flex-col items-center justify-center text-center w-full">
+                                <button type="button" @click="startRecording" class="w-20 h-20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all duration-300">
                                     <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
                                     </svg>
                                 </button>
                                 <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mt-4">Click to Start Recording</p>
-                                <p class="text-xs text-zinc-500 mt-1">Make sure your microphone is active and you are in a quiet environment.</p>
+                                <p class="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">Make sure your microphone is active and you are in a quiet environment.</p>
                             </div>
 
                             <!-- Recording State -->
-                            <div x-show="status === 'recording'" class="text-center w-full" x-cloak>
-                                <div class="flex items-center justify-center gap-1.5 h-10 mb-4">
+                            <div x-show="status === 'recording'" class="flex flex-col items-center justify-center text-center w-full" x-cloak>
+                                <div class="flex items-center justify-center gap-1.5 h-10 mb-4 mx-auto">
                                     <div class="w-1 bg-red-500 rounded-full animate-[pulse_0.8s_infinite] h-8"></div>
                                     <div class="w-1 bg-red-500 rounded-full animate-[pulse_0.8s_infinite_0.15s] h-5"></div>
                                     <div class="w-1 bg-red-500 rounded-full animate-[pulse_0.8s_infinite_0.3s] h-10"></div>
@@ -486,24 +486,24 @@ new #[Layout('components.layouts.app')] class extends Component {
                                 <div class="text-3xl font-black font-mono text-red-600 dark:text-red-500 mb-2" x-text="formatTime(seconds)">00:00</div>
                                 <p class="text-xs text-zinc-500 mb-6 animate-pulse">Recording your voice...</p>
                                 
-                                <button type="button" @click="stopRecording" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                <button type="button" @click="stopRecording" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all mx-auto">
                                     Stop & Save
                                 </button>
                             </div>
 
                             <!-- Finished / Ready State -->
-                            <div x-show="status === 'finished'" class="text-center w-full" x-cloak>
+                            <div x-show="status === 'finished'" class="flex flex-col items-center justify-center text-center w-full" x-cloak>
                                 <div class="w-14 h-14 bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Recording Saved!</h4>
-                                <p class="text-xs text-zinc-500 mt-1 mb-6">Listen back to your recording to ensure the audio quality is clear.</p>
+                                <p class="text-xs text-zinc-500 mt-1 mb-6 max-w-sm mx-auto">Listen back to your recording to ensure the audio quality is clear.</p>
                                 
                                 <audio :src="audioUrl" controls class="mx-auto mb-6 w-full max-w-md"></audio>
                                 
-                                <button type="button" @click="startRecording" class="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-semibold text-xs rounded-xl transition-all">
+                                <button type="button" @click="startRecording" class="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-semibold text-xs rounded-xl transition-all mx-auto">
                                     Re-record
                                 </button>
                             </div>
